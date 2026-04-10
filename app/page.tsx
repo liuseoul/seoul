@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
+
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 

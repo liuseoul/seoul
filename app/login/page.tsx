@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClient()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -19,6 +18,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
+    const supabase = createClient()
     const domain = process.env.NEXT_PUBLIC_EMAIL_DOMAIN || 'company.internal'
     const email = `${username.trim()}@${domain}`
 
