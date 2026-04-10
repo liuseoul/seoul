@@ -44,11 +44,12 @@ export default function ProjectDetailPanel({
   const [statusChanging, setStatusChanging] = useState(false)
 
   async function loadRecords() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('work_records')
-      .select('*, profiles(name)')
+      .select('*, profiles!work_records_author_id_fkey(name)')
       .eq('project_id', project.id)
       .order('created_at', { ascending: false })
+    if (error) console.error('loadRecords error:', error.message)
     setRecords(data || [])
   }
 
