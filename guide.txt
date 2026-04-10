@@ -1,0 +1,595 @@
+这里是 Phase 4 的完整代码指南，按页面逐一展开。
+
+---
+
+## Phase 4 — 构建关键页面（详细版）
+
+### 前置准备：建立 Supabase 客户端
+
+先创建两个工具文件，整个项目都会用到：
+
+**`lib/supabase/client.ts`** — 在浏览器组件中使用
+```typescript
+import { createBrowserClient } from '@supabase/auth-helpers-nextjs'
+
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+```
+
+**`lib/supabase/server.ts`** — 在服务端组件中使用
+```typescript
+import { createServerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+
+export function createClient() {
+  const cookieStore = cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  )
+}
+```
+
+---
+
+### 页面一：登录页 `app/login/page.tsx`
+
+```typescript
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+export default function LoginPage() {
+  const router = useRouter()
+  const supabase = createClient()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleLogin() {
+    setLoading(true)
+    setError('')
+
+    // Supabase 用 email 登录，管理员创建账号时用 username@yourcompany.internal 格式
+    const email = `${username}@yourcompany.internal`
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setError('用户名或密码错误，请联系管理员')
+      setLoading(false)
+      return
+    }
+
+    router.push('/projects')
+  }
+
+  return (
+    // 你的登录页 UI（参考之前的设计稿）
+    // 关键：调用 handleLogin()，显示 error，控制 loading 状态
+  )
+}
+```
+
+**登录流程说明：** Supabase 只支持 email 格式，所以管理员创建账号时用 `用户名@yourcompany.internal` 作为 email，用户看到的只是"用户名"输入框，前端自动拼接后缀再发给 Supabase，对用户透明。
+
+---
+
+### 页面二：根路由重定向 `app/page.tsx`
+
+```typescript
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+
+export default async function RootPage() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // 已登录 → 去项目页；未登录 → 去登录页
+  if (user) redirect('/projects')
+  else redirect('/login')
+}
+```
+
+---
+
+### 页面三：路由守卫 `middleware.ts`（放在项目根目录）
+
+这个文件保护所有页面，未登录用户无法访问任何内页：
+
+```typescript
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const isLoginPage = req.nextUrl.pathname === '/login'
+
+  if (!user && !isLoginPage) {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+  if (user && isLoginPage) {
+    return NextResponse.redirect(new URL('/projects', req.url))
+  }
+
+  return res
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}
+```
+
+---
+
+### 页面四：项目列表页 `app/projects/page.tsx`
+
+```typescript
+import { createClient } from '@/lib/supabase/server'
+import ProjectList from '@/components/ProjectList'
+
+export default async function ProjectsPage() {
+  const supabase = createClient()
+
+  // 获取当前用户的角色
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, name')
+    .eq('id', user!.id)
+    .single()
+
+  // 获取所有项目
+  const { data: projects } = await supabase
+    .from('projects')
+    .select(`
+      id, name, client, status, created_at,
+      work_records(count),
+      time_logs(started_at, finished_at)
+    `)
+    .order('created_at', { ascending: false })
+
+  return <ProjectList projects={projects} profile={profile} />
+}
+```
+
+**`components/ProjectList.tsx`**（客户端组件，负责筛选和交互）
+
+```typescript
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+const STATUS_LABELS: Record<string, string> = {
+  all: '全部', active: '进行中', delayed: '已延期',
+  completed: '已完成', cancelled: '未启动'
+}
+
+export default function ProjectList({ projects, profile }: any) {
+  const [filter, setFilter] = useState('all')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const router = useRouter()
+
+  const filtered = filter === 'all'
+    ? projects
+    : projects.filter((p: any) => p.status === filter)
+
+  // 计算每个项目的总工时
+  function calcHours(logs: any[]) {
+    return logs.reduce((sum: number, log: any) => {
+      if (!log.finished_at) return sum
+      const diff = (new Date(log.finished_at).getTime() - new Date(log.started_at).getTime()) / 3600000
+      return sum + diff
+    }, 0).toFixed(1)
+  }
+
+  return (
+    <div className="flex h-screen">
+      {/* 侧边栏 */}
+      <Sidebar profile={profile} />
+
+      {/* 主内容 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="topbar">
+          <span>项目概览</span>
+          {profile.role === 'admin' && (
+            <button onClick={() => router.push('/admin/new-project')}>
+              + 新建项目
+            </button>
+          )}
+        </div>
+
+        {/* 状态筛选 */}
+        <div className="status-bar">
+          {Object.entries(STATUS_LABELS).map(([key, label]) => (
+            <button key={key} onClick={() => setFilter(key)}
+              className={filter === key ? 'active' : ''}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* 横向项目列表 */}
+        <div className="project-list">
+          {filtered.map((project: any) => (
+            <div key={project.id}
+              className={`project-row ${selectedId === project.id ? 'selected' : ''}`}
+              onClick={() => setSelectedId(project.id)}>
+              <div className="pr-name-col">
+                <div className="pr-name">{project.name}</div>
+                <div className="pr-client">委托方：{project.client}</div>
+              </div>
+              <div className="pr-progress-col">
+                {/* 进度条 + 统计 */}
+                <div className="pr-stats">
+                  <span>记录 {project.work_records[0].count} 条</span>
+                  <span>工时 {calcHours(project.time_logs)}h</span>
+                </div>
+              </div>
+              <div className="pr-status-col">
+                <span className={`status-tag st-${project.status}`}>
+                  {STATUS_LABELS[project.status]}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 详情面板（右侧） */}
+      {selectedId && <ProjectDetailPanel projectId={selectedId} />}
+    </div>
+  )
+}
+```
+
+---
+
+### 页面五：项目详情面板 `components/ProjectDetailPanel.tsx`
+
+这个组件同时包含工作记录和计时功能：
+
+```typescript
+'use client'
+import { useEffect, useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
+
+export default function ProjectDetailPanel({ projectId }: { projectId: string }) {
+  const supabase = createClient()
+  const [tab, setTab] = useState<'records' | 'time'>('records')
+  const [records, setRecords] = useState<any[]>([])
+  const [timeLogs, setTimeLogs] = useState<any[]>([])
+  const [newRecord, setNewRecord] = useState('')
+  const [activeTimer, setActiveTimer] = useState<any>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const timerRef = useRef<any>(null)
+
+  // 加载工作记录（含软删除）
+  async function loadRecords() {
+    const { data } = await supabase
+      .from('work_records')
+      .select('*, profiles(name)')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+    setRecords(data || [])
+  }
+
+  // 加载工时记录
+  async function loadTimeLogs() {
+    const { data } = await supabase
+      .from('time_logs')
+      .select('*, profiles(name)')
+      .eq('project_id', projectId)
+      .order('started_at', { ascending: false })
+    setTimeLogs(data || [])
+
+    // 检查是否有未结束的计时（当前用户）
+    const { data: { user } } = await supabase.auth.getUser()
+    const running = data?.find((l: any) => !l.finished_at && l.member_id === user?.id)
+    if (running) {
+      setActiveTimer(running)
+      const startMs = new Date(running.started_at).getTime()
+      setElapsed(Math.floor((Date.now() - startMs) / 1000))
+    }
+  }
+
+  // 实时监听新记录（Supabase Realtime）
+  useEffect(() => {
+    loadRecords()
+    loadTimeLogs()
+
+    const channel = supabase
+      .channel(`project-${projectId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'work_records',
+        filter: `project_id=eq.${projectId}`
+      }, () => loadRecords())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [projectId])
+
+  // 计时器 tick
+  useEffect(() => {
+    if (activeTimer) {
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    } else {
+      clearInterval(timerRef.current)
+    }
+    return () => clearInterval(timerRef.current)
+  }, [activeTimer])
+
+  // 保存工作记录
+  async function saveRecord() {
+    if (!newRecord.trim()) return
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('work_records').insert({
+      project_id: projectId,
+      content: newRecord.trim(),
+      author_id: user!.id
+    })
+    setNewRecord('')
+    // Realtime 会自动触发 loadRecords()
+  }
+
+  // 软删除记录（标记 deleted=true，永不物理删除）
+  async function deleteRecord(id: string) {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('work_records').update({
+      deleted: true,
+      deleted_by: user!.id,
+      deleted_at: new Date().toISOString()
+    }).eq('id', id)
+  }
+
+  // 开始计时
+  async function startTimer() {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase.from('time_logs').insert({
+      project_id: projectId,
+      member_id: user!.id,
+      started_at: new Date().toISOString()
+    }).select().single()
+    setActiveTimer(data)
+    setElapsed(0)
+  }
+
+  // 停止计时，弹出填写工作内容
+  async function stopTimer() {
+    const desc = prompt('请填写本次工作内容：')
+    await supabase.from('time_logs').update({
+      finished_at: new Date().toISOString(),
+      description: desc || ''
+    }).eq('id', activeTimer.id)
+    setActiveTimer(null)
+    setElapsed(0)
+    loadTimeLogs()
+  }
+
+  // 格式化秒数为 Xh Xm Xs
+  function formatElapsed(s: number) {
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    if (h > 0) return `${h}小时 ${m}分 ${sec}秒`
+    if (m > 0) return `${m}分 ${sec}秒`
+    return `${sec}秒`
+  }
+
+  return (
+    <div className="detail-panel">
+      {/* 计时条 */}
+      {activeTimer && (
+        <div className="timer-bar">
+          <span>计时中 — {formatElapsed(elapsed)}</span>
+          <button onClick={stopTimer}>停止</button>
+        </div>
+      )}
+
+      {/* 标签切换 */}
+      <div className="panel-tabs">
+        <button onClick={() => setTab('records')} className={tab === 'records' ? 'active' : ''}>工作记录</button>
+        <button onClick={() => setTab('time')} className={tab === 'time' ? 'active' : ''}>工时记录</button>
+      </div>
+
+      <div className="panel-body">
+        {tab === 'records' && records.map((r: any) => (
+          <div key={r.id} className={`record-entry ${r.deleted ? 'deleted' : ''}`}>
+            <div className="record-author">
+              {r.profiles.name}
+              <span className="record-date">{new Date(r.created_at).toLocaleDateString('zh-CN')}</span>
+              {r.deleted && <span className="deleted-badge">已删除</span>}
+            </div>
+            <div className="record-content">{r.content}</div>
+            {!r.deleted && (
+              <button onClick={() => deleteRecord(r.id)}>标记删除</button>
+            )}
+          </div>
+        ))}
+
+        {tab === 'time' && timeLogs.map((l: any) => {
+          const dur = l.finished_at
+            ? ((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000).toFixed(1) + 'h'
+            : '进行中'
+          return (
+            <div key={l.id} className="time-entry">
+              <div className="time-row">
+                <span>{l.profiles.name}</span>
+                <span>{dur}</span>
+              </div>
+              <div className="time-range">
+                {new Date(l.started_at).toLocaleString('zh-CN')}
+                {l.finished_at && ` – ${new Date(l.finished_at).toLocaleTimeString('zh-CN')}`}
+              </div>
+              {l.description && <div className="time-desc">{l.description}</div>}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 添加记录 */}
+      <div className="add-record">
+        <textarea
+          value={newRecord}
+          onChange={e => setNewRecord(e.target.value)}
+          placeholder="添加工作记录…"
+          rows={2}
+        />
+        <div className="add-actions">
+          {!activeTimer
+            ? <button onClick={startTimer}>开始计时</button>
+            : <button onClick={stopTimer}>停止计时</button>
+          }
+          <button onClick={saveRecord}>保存记录</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### 页面六：管理员页面 `app/admin/page.tsx`
+
+```typescript
+'use client'
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+
+// 仅管理员可见，普通成员访问会被重定向
+export default function AdminPage() {
+  const supabase = createClient()
+  const [members, setMembers] = useState<any[]>([])
+
+  // 管理员创建新成员（服务端 API 路由调用，避免暴露 service key）
+  async function createMember(name: string, username: string, password: string) {
+    const res = await fetch('/api/admin/create-member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, username, password })
+    })
+    if (res.ok) alert('成员创建成功')
+    else alert('创建失败，请检查用户名是否重复')
+  }
+
+  // 重置成员密码
+  async function resetPassword(memberId: string, newPassword: string) {
+    await fetch('/api/admin/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId, newPassword })
+    })
+  }
+
+  return (
+    <div>
+      {/* 新建成员表单 */}
+      {/* 成员列表 + 重置密码按钮 */}
+      {/* 新建项目表单 */}
+    </div>
+  )
+}
+```
+
+**`app/api/admin/create-member/route.ts`**（服务端 API，使用 service_role key，绝不暴露给前端）
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+
+// 这个 key 只放在服务端，有完全权限，可跳过 RLS
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!   // 注意：没有 NEXT_PUBLIC_ 前缀，不暴露给浏览器
+)
+
+export async function POST(req: Request) {
+  const { name, username, password } = await req.json()
+
+  // 验证调用者是否是管理员（防止普通用户调用此接口）
+  // ... 验证逻辑省略，实际要检查 session
+
+  const email = `${username}@yourcompany.internal`
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true   // 跳过邮件确认，直接激活
+  })
+
+  if (error) return NextResponse.json({ error }, { status: 400 })
+
+  // 同步写入 profiles 表
+  await supabaseAdmin.from('profiles').insert({
+    id: data.user.id,
+    name,
+    email,
+    role: 'member'
+  })
+
+  return NextResponse.json({ success: true })
+}
+```
+
+---
+
+### 页面结构总览
+
+```
+app/
+  page.tsx                          → 自动跳转（已登录→项目页，未登录→登录页）
+  middleware.ts                     → 路由守卫（根目录）
+  login/
+    page.tsx                        → 登录页
+  projects/
+    page.tsx                        → 项目列表（服务端渲染）
+  admin/
+    page.tsx                        → 管理员后台
+  api/
+    admin/
+      create-member/route.ts        → 创建成员 API
+      reset-password/route.ts       → 重置密码 API
+
+components/
+  Sidebar.tsx                       → 侧边导航
+  ProjectList.tsx                   → 项目横向列表
+  ProjectDetailPanel.tsx            → 右侧详情面板（含记录+计时）
+lib/
+  supabase/
+    client.ts                       → 浏览器端 Supabase 实例
+    server.ts                       → 服务端 Supabase 实例
+```
+
+---
+
+### 三个容易出错的地方
+
+**1. service_role key 绝不能有 `NEXT_PUBLIC_` 前缀**，否则会暴露给所有用户，他们可以绕过 RLS 读写任何数据。
+
+**2. 软删除的 RLS 策略**要在 Supabase 控制台明确设置，禁止 `DELETE` 操作，只允许 `UPDATE` 的 `deleted` 字段：
+```sql
+-- 禁止任何人物理删除工作记录
+create policy "禁止删除工作记录" on work_records
+  for delete using (false);
+
+-- 只允许作者或管理员标记删除
+create policy "软删除工作记录" on work_records
+  for update using (
+    auth.uid() = author_id OR
+    exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  );
+```
+
+**3. Realtime 需要在 Supabase 控制台手动开启**，进入 Database → Replication，勾选 `work_records` 表，否则 `supabase.channel()` 不会推送更新。

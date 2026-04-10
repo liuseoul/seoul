@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  }
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  /* 状态标签 */
+  .status-tag {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap;
+  }
+  .st-active    { @apply bg-blue-100 text-blue-800; }
+  .st-delayed   { @apply bg-amber-100 text-amber-800; }
+  .st-completed { @apply bg-green-100 text-green-800; }
+  .st-cancelled { @apply bg-gray-100 text-gray-600; }
+
+  /* 项目行卡片 */
+  .project-row {
+    @apply flex items-center gap-4 bg-white border border-gray-200 rounded-lg px-5 py-4
+           cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all duration-150;
+  }
+  .project-row.selected {
+    @apply border-blue-500 shadow-md ring-1 ring-blue-500;
+  }
+
+  /* 详情面板 */
+  .detail-panel {
+    @apply w-96 bg-white border-l border-gray-200 flex flex-col h-full overflow-hidden flex-shrink-0;
+  }
+
+  /* 工作记录条目 */
+  .record-entry {
+    @apply p-3 rounded-lg border border-gray-100 bg-gray-50 mb-2;
+  }
+  .record-entry.deleted {
+    @apply opacity-50 bg-red-50 border-red-100;
+  }
+
+  /* 工时记录条目 */
+  .time-entry {
+    @apply p-3 rounded-lg border border-gray-100 bg-gray-50 mb-2;
+  }
+
+  /* 计时条 */
+  .timer-bar {
+    @apply flex items-center justify-between px-4 py-2 bg-blue-600 text-white text-sm font-medium;
+  }
+
+  /* 表单输入框 */
+  .input-field {
+    @apply w-full px-3 py-2 text-sm border border-gray-300 rounded-lg
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+           placeholder:text-gray-400;
+  }
+
+  /* 主按钮 */
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400
+           text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors duration-150;
+  }
+}
