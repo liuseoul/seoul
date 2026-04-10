@@ -3,23 +3,31 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
+type ScheduleEntry = { start_time: string; end_time: string; content: string }
+type ScheduleMap  = Record<string, ScheduleEntry[]>
+
 function MiniCalendar({
-  year, month, eventDates,
+  year, month, schedulesByDate,
 }: {
-  year: number; month: number; eventDates: string[]
+  year: number
+  month: number
+  schedulesByDate: ScheduleMap
 }) {
-  const firstDay = new Date(year, month, 1).getDay()
+  const [tooltip, setTooltip] = useState<{ entries: ScheduleEntry[]; x: number; y: number } | null>(null)
+
+  const firstDay   = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const today = new Date()
+  const today      = new Date()
 
   const cells: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let i = 1; i <= daysInMonth; i++) cells.push(i)
 
-  const hasEvent = (day: number) => {
-    const str = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return eventDates.includes(str)
-  }
+  const dateStr = (day: number) =>
+    `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+  const hasEvent = (day: number) => (schedulesByDate[dateStr(day)] || []).length > 0
+
   const isToday = (day: number) =>
     today.getFullYear() === year && today.getMonth() === month && today.getDate() === day
 
@@ -30,21 +38,50 @@ function MiniCalendar({
           <div key={d} className="text-[9px] text-slate-500 py-0.5">{d}</div>
         ))}
       </div>
+
       <div className="grid grid-cols-7 text-center">
         {cells.map((day, i) => (
           <div
             key={i}
-            className={`text-[11px] py-1 leading-none rounded
+            className={`text-[11px] py-1 leading-none rounded transition-colors
               ${!day ? '' :
                 isToday(day) ? 'bg-blue-600 text-white font-bold' :
-                hasEvent(day) ? 'text-amber-400 font-semibold' :
+                hasEvent(day) ? 'text-amber-400 font-semibold cursor-pointer hover:bg-slate-700' :
                 'text-slate-400'
               }`}
+            onMouseEnter={day && hasEvent(day) ? (e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              setTooltip({
+                entries: schedulesByDate[dateStr(day)],
+                x: rect.right + 10,
+                y: rect.top,
+              })
+            } : undefined}
+            onMouseLeave={day && hasEvent(day) ? () => setTooltip(null) : undefined}
           >
             {day || ''}
           </div>
         ))}
       </div>
+
+      {/* Hover tooltip — fixed positioned, appears to the right of the sidebar */}
+      {tooltip && (
+        <div
+          style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-xl shadow-2xl p-3 w-52 text-xs pointer-events-none"
+        >
+          {tooltip.entries
+            .sort((a, b) => a.start_time.localeCompare(b.start_time))
+            .map((entry, i) => (
+              <div key={i} className={i > 0 ? 'mt-2 pt-2 border-t border-gray-100' : ''}>
+                <div className="font-semibold text-blue-600 mb-0.5">
+                  {entry.start_time.slice(0, 5)} – {entry.end_time.slice(0, 5)}
+                </div>
+                <div className="text-gray-700 leading-relaxed">{entry.content}</div>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -54,35 +91,42 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ profile }: SidebarProps) {
-  const router = useRouter()
+  const router   = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
 
   const now = new Date()
-  const [calYear, setCalYear] = useState(now.getFullYear())
+  const [calYear,  setCalYear]  = useState(now.getFullYear())
   const [calMonth, setCalMonth] = useState(now.getMonth())
-  const [eventDates, setEventDates] = useState<string[]>([])
+  const [schedulesByDate, setSchedulesByDate] = useState<ScheduleMap>({})
   const [showModal, setShowModal] = useState(false)
 
   // Schedule form state
-  const [schDate, setSchDate] = useState(now.toISOString().split('T')[0])
-  const [schStart, setSchStart] = useState('09:00')
-  const [schEnd, setSchEnd] = useState('10:00')
+  const [schDate,    setSchDate]    = useState(now.toISOString().split('T')[0])
+  const [schStart,   setSchStart]   = useState('09:00')
+  const [schEnd,     setSchEnd]     = useState('10:00')
   const [schContent, setSchContent] = useState('')
-  const [schSaving, setSchSaving] = useState(false)
+  const [schSaving,  setSchSaving]  = useState(false)
 
-  useEffect(() => { loadEventDates() }, [calYear, calMonth])
+  useEffect(() => { loadSchedules() }, [calYear, calMonth])
 
-  async function loadEventDates() {
-    const pad = (n: number) => String(n).padStart(2, '0')
+  async function loadSchedules() {
+    const pad   = (n: number) => String(n).padStart(2, '0')
     const first = `${calYear}-${pad(calMonth + 1)}-01`
-    const last = `${calYear}-${pad(calMonth + 1)}-${new Date(calYear, calMonth + 1, 0).getDate()}`
+    const last  = `${calYear}-${pad(calMonth + 1)}-${new Date(calYear, calMonth + 1, 0).getDate()}`
+
     const { data } = await supabase
       .from('schedules')
-      .select('date')
+      .select('date, start_time, end_time, content')
       .gte('date', first)
       .lte('date', last)
-    setEventDates((data || []).map((r: any) => r.date))
+
+    const map: ScheduleMap = {}
+    for (const r of (data || [])) {
+      if (!map[r.date]) map[r.date] = []
+      map[r.date].push({ start_time: r.start_time, end_time: r.end_time, content: r.content })
+    }
+    setSchedulesByDate(map)
   }
 
   function prevMonth() {
@@ -96,21 +140,16 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   async function saveSchedule() {
     if (!schDate || !schStart || !schEnd || !schContent.trim()) {
-      alert('请填写完整信息')
-      return
+      alert('请填写完整信息'); return
     }
     if (schEnd <= schStart) {
-      alert('结束时间必须晚于开始时间')
-      return
+      alert('结束时间必须晚于开始时间'); return
     }
     setSchSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('schedules').insert({
-      date: schDate,
-      start_time: schStart,
-      end_time: schEnd,
-      content: schContent.trim(),
-      created_by: user!.id,
+      date: schDate, start_time: schStart, end_time: schEnd,
+      content: schContent.trim(), created_by: user!.id,
     })
     if (error) {
       alert('保存失败：' + error.message)
@@ -120,7 +159,7 @@ export default function Sidebar({ profile }: SidebarProps) {
       const d = new Date(schDate)
       setCalYear(d.getFullYear())
       setCalMonth(d.getMonth())
-      await loadEventDates()
+      await loadSchedules()
     }
     setSchSaving(false)
   }
@@ -176,7 +215,7 @@ export default function Sidebar({ profile }: SidebarProps) {
             <button onClick={nextMonth} className="text-slate-400 hover:text-white w-6 text-center text-sm">›</button>
           </div>
 
-          <MiniCalendar year={calYear} month={calMonth} eventDates={eventDates} />
+          <MiniCalendar year={calYear} month={calMonth} schedulesByDate={schedulesByDate} />
 
           {/* 增加日程 button */}
           <button

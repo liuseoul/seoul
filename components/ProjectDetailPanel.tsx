@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -9,20 +9,24 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: '未启动',
 }
 
-function formatElapsed(s: number) {
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = s % 60
-  if (h > 0) return `${h}h ${m}m ${sec}s`
-  if (m > 0) return `${m}m ${sec}s`
-  return `${sec}s`
-}
-
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('zh-CN', {
     month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
   })
+}
+
+function calcTotal(start: string, end: string): string {
+  if (!start || !end) return '—'
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  const totalMin = (eh * 60 + em) - (sh * 60 + sm)
+  if (totalMin <= 0) return '—'
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  if (h > 0 && m > 0) return `${h} 小时 ${m} 分钟`
+  if (h > 0) return `${h} 小时`
+  return `${m} 分钟`
 }
 
 export default function ProjectDetailPanel({
@@ -39,10 +43,16 @@ export default function ProjectDetailPanel({
   const [newRecord, setNewRecord] = useState('')
   const [saving, setSaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [activeTimer, setActiveTimer] = useState<any>(null)
-  const [elapsed, setElapsed] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [statusChanging, setStatusChanging] = useState(false)
+
+  // Add time-log modal state
+  const today = new Date().toISOString().split('T')[0]
+  const [showAddTime, setShowAddTime] = useState(false)
+  const [timeDate, setTimeDate] = useState(today)
+  const [timeStart, setTimeStart] = useState('09:00')
+  const [timeEnd, setTimeEnd] = useState('10:00')
+  const [timeContent, setTimeContent] = useState('')
+  const [savingTime, setSavingTime] = useState(false)
 
   async function loadRecords() {
     const { data, error } = await supabase
@@ -61,16 +71,6 @@ export default function ProjectDetailPanel({
       .eq('project_id', project.id)
       .order('started_at', { ascending: false })
     setTimeLogs(data || [])
-
-    const { data: { user } } = await supabase.auth.getUser()
-    const running = data?.find((l: any) => !l.finished_at && l.member_id === user?.id)
-    if (running) {
-      setActiveTimer(running)
-      setElapsed(Math.floor((Date.now() - new Date(running.started_at).getTime()) / 1000))
-    } else {
-      setActiveTimer(null)
-      setElapsed(0)
-    }
   }
 
   useEffect(() => {
@@ -89,15 +89,7 @@ export default function ProjectDetailPanel({
     return () => { supabase.removeChannel(channel) }
   }, [project.id])
 
-  useEffect(() => {
-    if (activeTimer) {
-      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [activeTimer])
-
+  // ── Work records ──────────────────────────────────────────
   async function saveRecord() {
     if (!newRecord.trim()) return
     setSaving(true)
@@ -107,11 +99,7 @@ export default function ProjectDetailPanel({
       content: newRecord.trim(),
       author_id: user!.id,
     })
-    if (error) {
-      alert('保存失败：' + error.message)
-      setSaving(false)
-      return
-    }
+    if (error) { alert('保存失败：' + error.message); setSaving(false); return }
     setNewRecord('')
     setSaving(false)
     loadRecords()
@@ -121,9 +109,7 @@ export default function ProjectDetailPanel({
     if (!confirm('确认标记该记录为已删除？')) return
     const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('work_records').update({
-      deleted: true,
-      deleted_by: user!.id,
-      deleted_at: new Date().toISOString(),
+      deleted: true, deleted_by: user!.id, deleted_at: new Date().toISOString(),
     }).eq('id', id)
     loadRecords()
   }
@@ -135,26 +121,47 @@ export default function ProjectDetailPanel({
     else loadRecords()
   }
 
-  async function startTimer() {
+  // ── Time logs ─────────────────────────────────────────────
+  async function addTimeLog() {
+    if (!timeDate || !timeStart || !timeEnd) { alert('请填写日期和时间'); return }
+    if (timeEnd <= timeStart) { alert('结束时间必须晚于开始时间'); return }
+    setSavingTime(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { data } = await supabase.from('time_logs').insert({
+    const startedAt  = new Date(`${timeDate}T${timeStart}:00`).toISOString()
+    const finishedAt = new Date(`${timeDate}T${timeEnd}:00`).toISOString()
+    const { error } = await supabase.from('time_logs').insert({
       project_id: project.id,
       member_id: user!.id,
-      started_at: new Date().toISOString(),
-    }).select().single()
-    setActiveTimer(data)
-    setElapsed(0)
+      started_at: startedAt,
+      finished_at: finishedAt,
+      description: timeContent.trim(),
+    })
+    if (error) { alert('保存失败：' + error.message) }
+    else {
+      setShowAddTime(false)
+      setTimeContent('')
+      setTimeDate(today)
+      setTimeStart('09:00')
+      setTimeEnd('10:00')
+      loadTimeLogs()
+    }
+    setSavingTime(false)
   }
 
-  async function stopTimer() {
-    const desc = prompt('请填写本次工作内容（可留空）：') ?? ''
+  async function softDeleteTimeLog(id: string) {
+    if (!confirm('确认标记该工时记录为已删除？')) return
+    const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('time_logs').update({
-      finished_at: new Date().toISOString(),
-      description: desc,
-    }).eq('id', activeTimer.id)
-    setActiveTimer(null)
-    setElapsed(0)
+      deleted: true, deleted_by: user!.id, deleted_at: new Date().toISOString(),
+    }).eq('id', id)
     loadTimeLogs()
+  }
+
+  async function hardDeleteTimeLog(id: string) {
+    if (!confirm('确认永久删除该工时记录？此操作不可恢复。')) return
+    const { error } = await supabase.from('time_logs').delete().eq('id', id)
+    if (error) alert('删除失败：' + error.message)
+    else loadTimeLogs()
   }
 
   async function changeStatus(newStatus: string) {
@@ -173,7 +180,6 @@ export default function ProjectDetailPanel({
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-gray-900 text-sm truncate">{project.name}</h2>
           <p className="text-xs text-gray-500 mt-0.5 truncate">委托方：{project.client || '—'}</p>
-          {/* New fields */}
           <div className="flex flex-wrap gap-2 mt-1.5">
             {project.agreement_party && (
               <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
@@ -189,7 +195,6 @@ export default function ProjectDetailPanel({
               </span>
             )}
           </div>
-          {/* Collaboration parties */}
           {project.collaboration_parties?.length > 0 && (
             <p className="text-xs text-gray-400 mt-1 truncate">
               协作：{(project.collaboration_parties as string[]).join(' · ')}
@@ -220,19 +225,6 @@ export default function ProjectDetailPanel({
         )}
       </div>
 
-      {/* Timer bar */}
-      {activeTimer && (
-        <div className="timer-bar flex-shrink-0">
-          <span>⏱ 计时中 — {formatElapsed(elapsed)}</span>
-          <button
-            onClick={stopTimer}
-            className="bg-white text-blue-700 text-xs font-medium px-3 py-1 rounded-full hover:bg-blue-50"
-          >
-            停止
-          </button>
-        </div>
-      )}
-
       {/* Tabs */}
       <div className="flex border-b border-gray-200 flex-shrink-0">
         {(['records', 'time'] as const).map(t => (
@@ -249,6 +241,7 @@ export default function ProjectDetailPanel({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
+
         {/* ── Work Records Tab ── */}
         {tab === 'records' && (
           <>
@@ -278,18 +271,12 @@ export default function ProjectDetailPanel({
                   </p>
                   <div className="flex gap-2 mt-1.5">
                     {canSoftDelete && (
-                      <button
-                        onClick={() => softDeleteRecord(r.id)}
-                        className="text-xs text-amber-500 hover:text-amber-700"
-                      >
+                      <button onClick={() => softDeleteRecord(r.id)} className="text-xs text-amber-500 hover:text-amber-700">
                         标记删除
                       </button>
                     )}
                     {canHardDelete && (
-                      <button
-                        onClick={() => hardDeleteRecord(r.id)}
-                        className="text-xs text-red-500 hover:text-red-700 font-medium"
-                      >
+                      <button onClick={() => hardDeleteRecord(r.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">
                         永久删除
                       </button>
                     )}
@@ -303,49 +290,60 @@ export default function ProjectDetailPanel({
         {/* ── Time Logs Tab ── */}
         {tab === 'time' && (
           <>
-            {/* Timer controls */}
+            {/* Add button */}
             <div className="mb-3">
-              {!activeTimer ? (
-                <button
-                  onClick={startTimer}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
-                             border border-blue-300 text-blue-600 text-sm font-medium
-                             hover:bg-blue-50 transition-colors"
-                >
-                  ▶ 开始计时
-                </button>
-              ) : (
-                <button
-                  onClick={stopTimer}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
-                             border border-amber-300 text-amber-700 text-sm font-medium
-                             bg-amber-50 hover:bg-amber-100 transition-colors"
-                >
-                  ⏹ 停止计时（{formatElapsed(elapsed)}）
-                </button>
-              )}
+              <button
+                onClick={() => setShowAddTime(true)}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
+                           border border-blue-300 text-blue-600 text-sm font-medium
+                           hover:bg-blue-50 transition-colors"
+              >
+                + 添加
+              </button>
             </div>
 
             {timeLogs.length === 0 && (
               <p className="text-center text-gray-400 text-sm py-8">暂无工时记录</p>
             )}
+
             {timeLogs.map((l: any) => {
+              const isOwner = l.member_id === currentUserId
+              const canSoftDelete = !l.deleted && (isOwner || isAdmin)
+              const canHardDelete = l.deleted && isAdmin
               const dur = l.finished_at
                 ? ((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000).toFixed(1) + ' 小时'
-                : '进行中…'
+                : '—'
+
               return (
-                <div key={l.id} className="time-entry">
+                <div key={l.id} className={`time-entry ${l.deleted ? 'opacity-50' : ''}`}>
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-xs font-medium text-gray-700">{l.profiles?.name || '未知'}</span>
-                    <span className={`text-xs font-semibold ${l.finished_at ? 'text-blue-600' : 'text-amber-500'}`}>
-                      {dur}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-blue-600">{dur}</span>
+                      {l.deleted && (
+                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">已删除</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className={`text-xs text-gray-400 ${l.deleted ? 'line-through' : ''}`}>
                     {formatDateTime(l.started_at)}
                     {l.finished_at && ` — ${new Date(l.finished_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`}
                   </div>
-                  {l.description && <p className="text-sm text-gray-600 mt-1">{l.description}</p>}
+                  {l.description && (
+                    <p className={`text-sm text-gray-600 mt-1 ${l.deleted ? 'line-through' : ''}`}>{l.description}</p>
+                  )}
+                  <div className="flex gap-2 mt-1.5">
+                    {canSoftDelete && (
+                      <button onClick={() => softDeleteTimeLog(l.id)} className="text-xs text-amber-500 hover:text-amber-700">
+                        删除
+                      </button>
+                    )}
+                    {canHardDelete && (
+                      <button onClick={() => hardDeleteTimeLog(l.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">
+                        永久删除
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -377,6 +375,93 @@ export default function ProjectDetailPanel({
         </div>
         <p className="text-xs text-gray-400 mt-1">Ctrl+Enter 快速保存</p>
       </div>
+
+      {/* ── Add Time Log Modal ── */}
+      {showAddTime && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-gray-900">添加工时记录</h3>
+              <button
+                onClick={() => setShowAddTime(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >✕</button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                <input
+                  type="date"
+                  value={timeDate}
+                  onChange={e => setTimeDate(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              {/* Start / End time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
+                  <input
+                    type="time"
+                    value={timeStart}
+                    onChange={e => setTimeStart(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
+                  <input
+                    type="time"
+                    value={timeEnd}
+                    onChange={e => setTimeEnd(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              {/* Total time (auto) */}
+              <div className="bg-blue-50 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-sm text-gray-600">合计时长</span>
+                <span className="text-sm font-semibold text-blue-700">
+                  {calcTotal(timeStart, timeEnd)}
+                </span>
+              </div>
+
+              {/* Content */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">工作内容</label>
+                <textarea
+                  value={timeContent}
+                  onChange={e => setTimeContent(e.target.value)}
+                  placeholder="本次工作内容（可留空）…"
+                  rows={3}
+                  className="input-field resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowAddTime(false)}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={addTimeLog}
+                disabled={savingTime}
+                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+              >
+                {savingTime ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
