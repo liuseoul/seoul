@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 )
 
 export async function POST(req: Request) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: '未授权' }, { status: 401 })
 

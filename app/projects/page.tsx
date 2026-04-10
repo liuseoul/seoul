@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import ProjectList from '@/components/ProjectList'
 
 export default async function ProjectsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
