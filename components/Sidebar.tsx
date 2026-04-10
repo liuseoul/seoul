@@ -252,8 +252,7 @@ export default function Sidebar({ profile }: SidebarProps) {
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0">D</div>
             <div>
-              <div className="text-sm font-semibold leading-tight">Project Mgmt</div>
-              <div className="text-xs text-slate-400 leading-tight mt-0.5">Deheng Team</div>
+              <div className="text-sm font-semibold leading-tight">Deheng Seoul</div>
             </div>
           </div>
         </div>
