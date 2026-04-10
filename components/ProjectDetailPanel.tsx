@@ -84,7 +84,7 @@ export default function ProjectDetailPanel({
   async function loadTimeLogs() {
     const { data, error } = await supabase
       .from('time_logs')
-      .select('*, profiles(name)')
+      .select('*, profiles!time_logs_member_id_fkey(name)')
       .eq('project_id', project.id)
       .order('started_at', { ascending: false })
     if (error) console.error('loadTimeLogs error:', error.message)
