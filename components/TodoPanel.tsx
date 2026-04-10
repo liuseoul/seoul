@@ -106,11 +106,16 @@ export default function TodoPanel() {
           <div key={todo.id} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-gray-100 group">
             <button
               onClick={() => toggleDone(todo)}
-              className="flex-shrink-0 mt-0.5 w-4.5 h-4.5 rounded-full border-2 border-gray-400
+              className="flex-shrink-0 mt-0.5 w-7 h-7 rounded-full border-2 border-gray-400
                          hover:border-blue-500 transition-colors"
               title="标记完成"
             />
-            <span className="text-sm text-gray-800 leading-snug break-words flex-1">{todo.content}</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-[11px] text-gray-800 leading-snug break-words">{todo.content}</span>
+              <span className="block text-[10px] text-gray-400 mt-0.5">
+                {new Date(todo.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}
+              </span>
+            </div>
           </div>
         ))}
 
@@ -129,15 +134,20 @@ export default function TodoPanel() {
           <div key={todo.id} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-gray-100 group">
             <button
               onClick={() => toggleDone(todo)}
-              className="flex-shrink-0 mt-0.5 w-4.5 h-4.5 rounded-full bg-green-500
+              className="flex-shrink-0 mt-0.5 w-7 h-7 rounded-full bg-green-500
                          flex items-center justify-center transition-colors hover:bg-gray-400"
               title="取消完成"
             >
-              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </button>
-            <span className="text-sm text-gray-400 line-through leading-snug break-words flex-1">{todo.content}</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-[11px] text-gray-400 line-through leading-snug break-words">{todo.content}</span>
+              <span className="block text-[10px] text-gray-400 mt-0.5">
+                {new Date(todo.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}
+              </span>
+            </div>
           </div>
         ))}
       </div>
