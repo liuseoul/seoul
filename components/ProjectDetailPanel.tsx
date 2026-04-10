@@ -13,9 +13,9 @@ function formatElapsed(s: number) {
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
   const sec = s % 60
-  if (h > 0) return `${h}时 ${m}分 ${sec}秒`
-  if (m > 0) return `${m}分 ${sec}秒`
-  return `${sec} 秒`
+  if (h > 0) return `${h}h ${m}m ${sec}s`
+  if (m > 0) return `${m}m ${sec}s`
+  return `${sec}s`
 }
 
 function formatDateTime(iso: string) {
@@ -38,6 +38,7 @@ export default function ProjectDetailPanel({
   const [timeLogs, setTimeLogs] = useState<any[]>([])
   const [newRecord, setNewRecord] = useState('')
   const [saving, setSaving] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [activeTimer, setActiveTimer] = useState<any>(null)
   const [elapsed, setElapsed] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -61,7 +62,6 @@ export default function ProjectDetailPanel({
       .order('started_at', { ascending: false })
     setTimeLogs(data || [])
 
-    // 检查当前用户是否有未结束的计时
     const { data: { user } } = await supabase.auth.getUser()
     const running = data?.find((l: any) => !l.finished_at && l.member_id === user?.id)
     if (running) {
@@ -74,10 +74,10 @@ export default function ProjectDetailPanel({
   }
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
     loadRecords()
     loadTimeLogs()
 
-    // Realtime 订阅工作记录变更
     const channel = supabase
       .channel(`project-${project.id}`)
       .on('postgres_changes', {
@@ -89,7 +89,6 @@ export default function ProjectDetailPanel({
     return () => { supabase.removeChannel(channel) }
   }, [project.id])
 
-  // 计时器 tick
   useEffect(() => {
     if (activeTimer) {
       timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
@@ -115,17 +114,25 @@ export default function ProjectDetailPanel({
     }
     setNewRecord('')
     setSaving(false)
-    loadRecords() // 主动刷新，不依赖 Realtime
+    loadRecords()
   }
 
   async function softDeleteRecord(id: string) {
-    if (!confirm('确认标记该记录为已删除？此操作不可撤销。')) return
+    if (!confirm('确认标记该记录为已删除？')) return
     const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('work_records').update({
       deleted: true,
       deleted_by: user!.id,
       deleted_at: new Date().toISOString(),
     }).eq('id', id)
+    loadRecords()
+  }
+
+  async function hardDeleteRecord(id: string) {
+    if (!confirm('确认永久删除该记录？此操作不可恢复。')) return
+    const { error } = await supabase.from('work_records').delete().eq('id', id)
+    if (error) alert('删除失败：' + error.message)
+    else loadRecords()
   }
 
   async function startTimer() {
@@ -154,27 +161,39 @@ export default function ProjectDetailPanel({
     setStatusChanging(true)
     await supabase.from('projects').update({ status: newStatus }).eq('id', project.id)
     setStatusChanging(false)
-    // 刷新页面以更新列表
     window.location.reload()
   }
+
+  const isAdmin = profile?.role === 'admin'
 
   return (
     <div className="detail-panel">
       {/* Header */}
       <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-gray-900 text-sm truncate">{project.name}</h2>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">
-            委托方：{project.client || '—'}
-          </p>
+          <h2 className="font-bold text-gray-900 text-sm truncate">{project.name}</h2>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">委托方：{project.client || '—'}</p>
+          {/* New fields */}
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {project.agreement_party && (
+              <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
+                {project.agreement_party}
+              </span>
+            )}
+            {project.service_fee_currency && (
+              <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium">
+                {project.service_fee_currency}
+              </span>
+            )}
+          </div>
+          {/* Collaboration parties */}
+          {project.collaboration_parties?.length > 0 && (
+            <p className="text-xs text-gray-400 mt-1 truncate">
+              协作：{(project.collaboration_parties as string[]).join(' · ')}
+            </p>
+          )}
         </div>
-        <button
-          onClick={onClose}
-          className="ml-2 text-gray-400 hover:text-gray-600 flex-shrink-0 p-1"
-          title="关闭"
-        >
-          ✕
-        </button>
+        <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600 flex-shrink-0 p-1">✕</button>
       </div>
 
       {/* Status + admin controls */}
@@ -182,7 +201,7 @@ export default function ProjectDetailPanel({
         <span className={`status-tag st-${project.status}`}>
           {STATUS_LABELS[project.status] || project.status}
         </span>
-        {profile?.role === 'admin' && (
+        {isAdmin && (
           <select
             defaultValue={project.status}
             disabled={statusChanging}
@@ -218,10 +237,7 @@ export default function ProjectDetailPanel({
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2.5 text-sm font-medium transition-colors
-              ${tab === t
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-              }`}
+              ${tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
           >
             {t === 'records' ? '工作记录' : '工时记录'}
           </button>
@@ -230,46 +246,83 @@ export default function ProjectDetailPanel({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        {/* ── Work Records Tab ── */}
         {tab === 'records' && (
           <>
             {records.length === 0 && (
               <p className="text-center text-gray-400 text-sm py-8">暂无工作记录</p>
             )}
-            {records.map((r: any) => (
-              <div key={r.id} className={`record-entry ${r.deleted ? 'deleted' : ''}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-gray-700">
-                    {r.profiles?.name || '未知'}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-400">
-                      {formatDateTime(r.created_at)}
+            {records.map((r: any) => {
+              const isOwner = r.author_id === currentUserId
+              const canSoftDelete = !r.deleted && (isOwner || isAdmin)
+              const canHardDelete = r.deleted && isAdmin
+
+              return (
+                <div key={r.id} className={`record-entry ${r.deleted ? 'deleted' : ''}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-700">
+                      {r.profiles?.name || '未知'}
                     </span>
-                    {r.deleted && (
-                      <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
-                        已删除
-                      </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-400">{formatDateTime(r.created_at)}</span>
+                      {r.deleted && (
+                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">已删除</span>
+                      )}
+                    </div>
+                  </div>
+                  <p className={`text-sm text-gray-800 leading-relaxed ${r.deleted ? 'line-through text-gray-400' : ''}`}>
+                    {r.content}
+                  </p>
+                  <div className="flex gap-2 mt-1.5">
+                    {canSoftDelete && (
+                      <button
+                        onClick={() => softDeleteRecord(r.id)}
+                        className="text-xs text-amber-500 hover:text-amber-700"
+                      >
+                        标记删除
+                      </button>
+                    )}
+                    {canHardDelete && (
+                      <button
+                        onClick={() => hardDeleteRecord(r.id)}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium"
+                      >
+                        永久删除
+                      </button>
                     )}
                   </div>
                 </div>
-                <p className={`text-sm text-gray-800 leading-relaxed ${r.deleted ? 'line-through text-gray-400' : ''}`}>
-                  {r.content}
-                </p>
-                {!r.deleted && (
-                  <button
-                    onClick={() => softDeleteRecord(r.id)}
-                    className="mt-1.5 text-xs text-red-400 hover:text-red-600"
-                  >
-                    标记删除
-                  </button>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </>
         )}
 
+        {/* ── Time Logs Tab ── */}
         {tab === 'time' && (
           <>
+            {/* Timer controls */}
+            <div className="mb-3">
+              {!activeTimer ? (
+                <button
+                  onClick={startTimer}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
+                             border border-blue-300 text-blue-600 text-sm font-medium
+                             hover:bg-blue-50 transition-colors"
+                >
+                  ▶ 开始计时
+                </button>
+              ) : (
+                <button
+                  onClick={stopTimer}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
+                             border border-amber-300 text-amber-700 text-sm font-medium
+                             bg-amber-50 hover:bg-amber-100 transition-colors"
+                >
+                  ⏹ 停止计时（{formatElapsed(elapsed)}）
+                </button>
+              )}
+            </div>
+
             {timeLogs.length === 0 && (
               <p className="text-center text-gray-400 text-sm py-8">暂无工时记录</p>
             )}
@@ -280,9 +333,7 @@ export default function ProjectDetailPanel({
               return (
                 <div key={l.id} className="time-entry">
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-xs font-medium text-gray-700">
-                      {l.profiles?.name || '未知'}
-                    </span>
+                    <span className="text-xs font-medium text-gray-700">{l.profiles?.name || '未知'}</span>
                     <span className={`text-xs font-semibold ${l.finished_at ? 'text-blue-600' : 'text-amber-500'}`}>
                       {dur}
                     </span>
@@ -291,9 +342,7 @@ export default function ProjectDetailPanel({
                     {formatDateTime(l.started_at)}
                     {l.finished_at && ` — ${new Date(l.finished_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`}
                   </div>
-                  {l.description && (
-                    <p className="text-sm text-gray-600 mt-1">{l.description}</p>
-                  )}
+                  {l.description && <p className="text-sm text-gray-600 mt-1">{l.description}</p>}
                 </div>
               )
             })}
@@ -301,7 +350,7 @@ export default function ProjectDetailPanel({
         )}
       </div>
 
-      {/* Add record + timer */}
+      {/* Add record footer */}
       <div className="flex-shrink-0 border-t border-gray-200 px-4 py-3 bg-gray-50">
         <textarea
           value={newRecord}
@@ -311,21 +360,9 @@ export default function ProjectDetailPanel({
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none
                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                      placeholder:text-gray-400 bg-white"
-          onKeyDown={e => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveRecord()
-          }}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveRecord() }}
         />
-        <div className="flex items-center justify-between mt-2 gap-2">
-          <button
-            onClick={activeTimer ? stopTimer : startTimer}
-            className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors
-              ${activeTimer
-                ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
-                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-          >
-            {activeTimer ? '⏹ 停止计时' : '▶ 开始计时'}
-          </button>
+        <div className="flex items-center justify-end mt-2">
           <button
             onClick={saveRecord}
             disabled={saving || !newRecord.trim()}

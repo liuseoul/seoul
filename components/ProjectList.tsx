@@ -14,13 +14,14 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
 
+// Alternating light background colors
+const ROW_COLORS = ['bg-white', 'bg-blue-50']
+
 function calcHours(logs: Array<{ started_at: string; finished_at: string | null }>) {
   return logs
     .reduce((sum, log) => {
       if (!log.finished_at) return sum
-      const diff =
-        (new Date(log.finished_at).getTime() - new Date(log.started_at).getTime()) / 3600000
-      return sum + diff
+      return sum + (new Date(log.finished_at).getTime() - new Date(log.started_at).getTime()) / 3600000
     }, 0)
     .toFixed(1)
 }
@@ -44,7 +45,6 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
     <div className="flex h-screen overflow-hidden">
       <Sidebar profile={profile} />
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 flex-shrink-0">
@@ -81,9 +81,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
               )}
             </button>
           ))}
-          <span className="ml-auto text-xs text-gray-400">
-            共 {filtered.length} 个项目
-          </span>
+          <span className="ml-auto text-xs text-gray-400">共 {filtered.length} 个项目</span>
         </div>
 
         {/* Project list */}
@@ -95,22 +93,26 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
             </div>
           )}
 
-          {filtered.map((project: any) => {
+          {filtered.map((project: any, index: number) => {
             const recordCount = project.work_records?.[0]?.count ?? 0
             const hours = calcHours(project.time_logs || [])
             const isSelected = selectedId === project.id
+            const rowBg = ROW_COLORS[index % 2]
 
             return (
               <div
                 key={project.id}
-                className={`project-row ${isSelected ? 'selected' : ''}`}
+                className={`project-row ${isSelected ? 'selected' : rowBg}`}
                 onClick={() => setSelectedId(isSelected ? null : project.id)}
               >
                 {/* Left: name + client */}
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{project.name}</div>
-                  <div className="text-sm text-gray-500 mt-0.5 truncate">
-                    委托方：{project.client || '—'}
+                  <div className="font-bold text-gray-900 truncate">{project.name}</div>
+                  <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-3 truncate">
+                    <span>委托方：{project.client || '—'}</span>
+                    {project.agreement_party && (
+                      <span className="text-xs text-indigo-500 font-medium">{project.agreement_party}</span>
+                    )}
                   </div>
                 </div>
 
@@ -141,7 +143,6 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         </div>
       </div>
 
-      {/* Detail panel */}
       {selectedProject && (
         <ProjectDetailPanel
           project={selectedProject}

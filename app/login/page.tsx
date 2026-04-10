@@ -12,7 +12,7 @@ export default function LoginPage() {
 
   async function handleLogin() {
     if (!username.trim() || !password) {
-      setError('请填写用户名和密码')
+      setError('Please enter your username and password.')
       return
     }
     setLoading(true)
@@ -25,7 +25,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError('用户名或密码错误，请联系管理员')
+      setError('Invalid username or password. Please contact your administrator.')
       setLoading(false)
       return
     }
@@ -41,26 +41,24 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo / Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4">
-            <span className="text-white text-2xl font-bold">德</span>
+            <span className="text-white text-2xl font-bold">D</span>
           </div>
-          <h1 className="text-white text-2xl font-semibold">项目管理系统</h1>
-          <p className="text-slate-400 text-sm mt-1">请使用内部账号登录</p>
+          <h1 className="text-white text-2xl font-semibold">Project Management</h1>
+          <p className="text-slate-400 text-sm mt-1">Sign in with your internal account</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="请输入用户名"
+                placeholder="Enter username"
                 autoFocus
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm
                            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
@@ -69,13 +67,13 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="请输入密码"
+                placeholder="Enter password"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm
                            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                            placeholder:text-gray-400"
@@ -95,13 +93,13 @@ export default function LoginPage() {
                          text-white font-medium py-2.5 rounded-lg transition-colors duration-150
                          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              {loading ? '登录中…' : '登录'}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </div>
         </div>
 
         <p className="text-center text-slate-500 text-xs mt-6">
-          账号由管理员创建，如有问题请联系管理员
+          Accounts are created by administrator. Contact admin for access.
         </p>
       </div>
     </div>
