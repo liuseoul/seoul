@@ -102,14 +102,19 @@ export default function ProjectDetailPanel({
     if (!newRecord.trim()) return
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('work_records').insert({
+    const { error } = await supabase.from('work_records').insert({
       project_id: project.id,
       content: newRecord.trim(),
       author_id: user!.id,
     })
+    if (error) {
+      alert('保存失败：' + error.message)
+      setSaving(false)
+      return
+    }
     setNewRecord('')
     setSaving(false)
-    // Realtime 自动触发 loadRecords
+    loadRecords() // 主动刷新，不依赖 Realtime
   }
 
   async function softDeleteRecord(id: string) {
