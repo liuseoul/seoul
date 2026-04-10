@@ -16,6 +16,12 @@ function formatDateTime(iso: string) {
   })
 }
 
+function formatDateOnly(iso: string) {
+  return new Date(iso).toLocaleDateString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  })
+}
+
 function calcTotal(start: string, end: string): string {
   if (!start || !end) return '—'
   const [sh, sm] = start.split(':').map(Number)
@@ -29,6 +35,12 @@ function calcTotal(start: string, end: string): string {
   return `${m} 分钟`
 }
 
+function localDatetime(dateStr: string, timeStr: string): string {
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  const [h, mi]    = timeStr.split(':').map(Number)
+  return new Date(y, mo - 1, d, h, mi, 0).toISOString()
+}
+
 export default function ProjectDetailPanel({
   project, profile, onClose,
 }: {
@@ -38,21 +50,26 @@ export default function ProjectDetailPanel({
 }) {
   const supabase = createClient()
   const [tab, setTab] = useState<'records' | 'time'>('records')
-  const [records, setRecords] = useState<any[]>([])
-  const [timeLogs, setTimeLogs] = useState<any[]>([])
-  const [newRecord, setNewRecord] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [records, setRecords]         = useState<any[]>([])
+  const [timeLogs, setTimeLogs]       = useState<any[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [statusChanging, setStatusChanging] = useState(false)
 
-  // Add time-log modal state
   const today = new Date().toISOString().split('T')[0]
-  const [showAddTime, setShowAddTime] = useState(false)
-  const [timeDate, setTimeDate] = useState(today)
-  const [timeStart, setTimeStart] = useState('09:00')
-  const [timeEnd, setTimeEnd] = useState('10:00')
-  const [timeContent, setTimeContent] = useState('')
-  const [savingTime, setSavingTime] = useState(false)
+
+  // ── Add Work Record modal ──────────────────────────────────
+  const [showAddRecord,  setShowAddRecord]  = useState(false)
+  const [recordDate,     setRecordDate]     = useState(today)
+  const [recordContent,  setRecordContent]  = useState('')
+  const [savingRecord,   setSavingRecord]   = useState(false)
+
+  // ── Add Time Log modal ────────────────────────────────────
+  const [showAddTime,  setShowAddTime]  = useState(false)
+  const [timeDate,     setTimeDate]     = useState(today)
+  const [timeStart,    setTimeStart]    = useState('09:00')
+  const [timeEnd,      setTimeEnd]      = useState('10:00')
+  const [timeContent,  setTimeContent]  = useState('')
+  const [savingTime,   setSavingTime]   = useState(false)
 
   async function loadRecords() {
     const { data, error } = await supabase
@@ -65,11 +82,12 @@ export default function ProjectDetailPanel({
   }
 
   async function loadTimeLogs() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('time_logs')
       .select('*, profiles(name)')
       .eq('project_id', project.id)
       .order('started_at', { ascending: false })
+    if (error) console.error('loadTimeLogs error:', error.message)
     setTimeLogs(data || [])
   }
 
@@ -91,18 +109,28 @@ export default function ProjectDetailPanel({
 
   // ── Work records ──────────────────────────────────────────
   async function saveRecord() {
-    if (!newRecord.trim()) return
-    setSaving(true)
+    if (!recordContent.trim()) return
+    setSavingRecord(true)
     const { data: { user } } = await supabase.auth.getUser()
+    // Use noon on the chosen date so ordering by created_at reflects user's date
+    const [y, mo, d] = recordDate.split('-').map(Number)
+    const createdAt = new Date(y, mo - 1, d, 12, 0, 0).toISOString()
     const { error } = await supabase.from('work_records').insert({
       project_id: project.id,
-      content: newRecord.trim(),
-      author_id: user!.id,
+      content:    recordContent.trim(),
+      author_id:  user!.id,
+      created_at: createdAt,
     })
-    if (error) { alert('保存失败：' + error.message); setSaving(false); return }
-    setNewRecord('')
-    setSaving(false)
-    loadRecords()
+    if (error) {
+      alert('保存失败：' + error.message)
+      setSavingRecord(false)
+      return
+    }
+    await loadRecords()
+    setRecordContent('')
+    setRecordDate(today)
+    setSavingRecord(false)
+    setShowAddRecord(false)
   }
 
   async function softDeleteRecord(id: string) {
@@ -127,25 +155,25 @@ export default function ProjectDetailPanel({
     if (timeEnd <= timeStart) { alert('结束时间必须晚于开始时间'); return }
     setSavingTime(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const startedAt  = new Date(`${timeDate}T${timeStart}:00`).toISOString()
-    const finishedAt = new Date(`${timeDate}T${timeEnd}:00`).toISOString()
     const { error } = await supabase.from('time_logs').insert({
-      project_id: project.id,
-      member_id: user!.id,
-      started_at: startedAt,
-      finished_at: finishedAt,
+      project_id:  project.id,
+      member_id:   user!.id,
+      started_at:  localDatetime(timeDate, timeStart),
+      finished_at: localDatetime(timeDate, timeEnd),
       description: timeContent.trim(),
     })
-    if (error) { alert('保存失败：' + error.message) }
-    else {
-      setShowAddTime(false)
-      setTimeContent('')
-      setTimeDate(today)
-      setTimeStart('09:00')
-      setTimeEnd('10:00')
-      loadTimeLogs()
+    if (error) {
+      alert('保存失败：' + error.message)
+      setSavingTime(false)
+      return
     }
+    await loadTimeLogs()
+    setTimeContent('')
+    setTimeDate(today)
+    setTimeStart('09:00')
+    setTimeEnd('10:00')
     setSavingTime(false)
+    setShowAddTime(false)
   }
 
   async function softDeleteTimeLog(id: string) {
@@ -239,17 +267,29 @@ export default function ProjectDetailPanel({
         ))}
       </div>
 
-      {/* Content */}
+      {/* Content — fills remaining height */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
 
         {/* ── Work Records Tab ── */}
         {tab === 'records' && (
           <>
+            {/* Add button */}
+            <div className="mb-3">
+              <button
+                onClick={() => setShowAddRecord(true)}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
+                           border border-blue-300 text-blue-600 text-sm font-medium
+                           hover:bg-blue-50 transition-colors"
+              >
+                + 添加
+              </button>
+            </div>
+
             {records.length === 0 && (
               <p className="text-center text-gray-400 text-sm py-8">暂无工作记录</p>
             )}
             {records.map((r: any) => {
-              const isOwner = r.author_id === currentUserId
+              const isOwner       = r.author_id === currentUserId
               const canSoftDelete = !r.deleted && (isOwner || isAdmin)
               const canHardDelete = r.deleted && isAdmin
 
@@ -260,7 +300,7 @@ export default function ProjectDetailPanel({
                       {r.profiles?.name || '未知'}
                     </span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-400">{formatDateTime(r.created_at)}</span>
+                      <span className="text-xs text-gray-400">{formatDateOnly(r.created_at)}</span>
                       {r.deleted && (
                         <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">已删除</span>
                       )}
@@ -290,7 +330,6 @@ export default function ProjectDetailPanel({
         {/* ── Time Logs Tab ── */}
         {tab === 'time' && (
           <>
-            {/* Add button */}
             <div className="mb-3">
               <button
                 onClick={() => setShowAddTime(true)}
@@ -307,7 +346,7 @@ export default function ProjectDetailPanel({
             )}
 
             {timeLogs.map((l: any) => {
-              const isOwner = l.member_id === currentUserId
+              const isOwner       = l.member_id === currentUserId
               const canSoftDelete = !l.deleted && (isOwner || isAdmin)
               const canHardDelete = l.deleted && isAdmin
               const dur = l.finished_at
@@ -351,30 +390,60 @@ export default function ProjectDetailPanel({
         )}
       </div>
 
-      {/* Add record footer */}
-      <div className="flex-shrink-0 border-t border-gray-200 px-4 py-3 bg-gray-50">
-        <textarea
-          value={newRecord}
-          onChange={e => setNewRecord(e.target.value)}
-          placeholder="添加工作记录…"
-          rows={2}
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                     placeholder:text-gray-400 bg-white"
-          onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveRecord() }}
-        />
-        <div className="flex items-center justify-end mt-2">
-          <button
-            onClick={saveRecord}
-            disabled={saving || !newRecord.trim()}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400
-                       text-white text-xs font-medium px-4 py-1.5 rounded-lg transition-colors"
-          >
-            {saving ? '保存中…' : '保存记录'}
-          </button>
+      {/* ── Add Work Record Modal ── */}
+      {showAddRecord && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-gray-900">添加工作记录</h3>
+              <button
+                onClick={() => setShowAddRecord(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >✕</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                <input
+                  type="date"
+                  value={recordDate}
+                  onChange={e => setRecordDate(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">内容</label>
+                <textarea
+                  value={recordContent}
+                  onChange={e => setRecordContent(e.target.value)}
+                  placeholder="工作内容…"
+                  rows={4}
+                  className="input-field resize-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowAddRecord(false)}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={saveRecord}
+                disabled={savingRecord || !recordContent.trim()}
+                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+              >
+                {savingRecord ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Ctrl+Enter 快速保存</p>
-      </div>
+      )}
 
       {/* ── Add Time Log Modal ── */}
       {showAddTime && (
@@ -389,7 +458,6 @@ export default function ProjectDetailPanel({
             </div>
 
             <div className="space-y-4">
-              {/* Date */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
                 <input
@@ -399,38 +467,20 @@ export default function ProjectDetailPanel({
                   className="input-field"
                 />
               </div>
-
-              {/* Start / End time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
-                  <input
-                    type="time"
-                    value={timeStart}
-                    onChange={e => setTimeStart(e.target.value)}
-                    className="input-field"
-                  />
+                  <input type="time" value={timeStart} onChange={e => setTimeStart(e.target.value)} className="input-field" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
-                  <input
-                    type="time"
-                    value={timeEnd}
-                    onChange={e => setTimeEnd(e.target.value)}
-                    className="input-field"
-                  />
+                  <input type="time" value={timeEnd} onChange={e => setTimeEnd(e.target.value)} className="input-field" />
                 </div>
               </div>
-
-              {/* Total time (auto) */}
               <div className="bg-blue-50 rounded-lg px-3 py-2 flex items-center justify-between">
                 <span className="text-sm text-gray-600">合计时长</span>
-                <span className="text-sm font-semibold text-blue-700">
-                  {calcTotal(timeStart, timeEnd)}
-                </span>
+                <span className="text-sm font-semibold text-blue-700">{calcTotal(timeStart, timeEnd)}</span>
               </div>
-
-              {/* Content */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">工作内容</label>
                 <textarea
