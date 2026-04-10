@@ -164,7 +164,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         />
       )}
 
-      <TodoPanel />
+      <TodoPanel isAdmin={profile?.role === 'admin'} />
     </div>
   )
 }
