@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 
 const STATUS_LABELS: Record<string, string> = {
   active: '进行中',
-  delayed: '已延期',
+  delayed: '已取消',
   completed: '已完成',
   cancelled: '未启动',
 }
@@ -246,7 +246,7 @@ export default function ProjectDetailPanel({
                        focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="active">进行中</option>
-            <option value="delayed">已延期</option>
+            <option value="delayed">已取消</option>
             <option value="completed">已完成</option>
             <option value="cancelled">未启动</option>
           </select>

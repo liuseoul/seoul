@@ -3,18 +3,18 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from './Sidebar'
 import ProjectDetailPanel from './ProjectDetailPanel'
+import TodoPanel from './TodoPanel'
 
 const STATUS_LABELS: Record<string, string> = {
-  all: '全部',
-  active: '进行中',
-  delayed: '已延期',
+  all:       '全部',
+  active:    '进行中',
+  delayed:   '已取消',
   completed: '已完成',
   cancelled: '未启动',
 }
 
 const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
 
-// Alternating light background colors
 const ROW_COLORS = ['bg-white', 'bg-blue-50']
 
 function calcHours(logs: Array<{ started_at: string; finished_at: string | null }>) {
@@ -32,12 +32,19 @@ function formatDate(iso: string) {
 }
 
 export default function ProjectList({ projects, profile }: { projects: any[]; profile: any }) {
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter]     = useState('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const router = useRouter()
 
-  const filtered =
+  // Sort: 已取消 (delayed) always sink to the bottom
+  const sorted = (list: any[]) => [
+    ...list.filter((p: any) => p.status !== 'delayed'),
+    ...list.filter((p: any) => p.status === 'delayed'),
+  ]
+
+  const filtered = sorted(
     filter === 'all' ? projects : projects.filter((p: any) => p.status === filter)
+  )
 
   const selectedProject = projects.find((p: any) => p.id === selectedId) || null
 
@@ -94,22 +101,28 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           )}
 
           {filtered.map((project: any, index: number) => {
+            const isCancelled = project.status === 'delayed'
             const recordCount = project.work_records?.[0]?.count ?? 0
-            const hours = calcHours(project.time_logs || [])
-            const isSelected = selectedId === project.id
-            const rowBg = ROW_COLORS[index % 2]
+            const hours       = calcHours(project.time_logs || [])
+            const isSelected  = selectedId === project.id
+            const rowBg       = ROW_COLORS[index % 2]
 
             return (
               <div
                 key={project.id}
-                className={`project-row ${isSelected ? 'selected' : rowBg}`}
+                className={`project-row ${isSelected ? 'selected' : rowBg}
+                  ${isCancelled ? 'opacity-50' : ''}`}
                 onClick={() => setSelectedId(isSelected ? null : project.id)}
               >
                 {/* Left: name + client */}
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900 truncate">{project.name}</div>
+                  <div className={`font-bold text-gray-900 truncate ${isCancelled ? 'line-through' : ''}`}>
+                    {project.name}
+                  </div>
                   <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-3 truncate">
-                    <span>委托方：{project.client || '—'}</span>
+                    <span className={isCancelled ? 'line-through' : ''}>
+                      委托方：{project.client || '—'}
+                    </span>
                     {project.agreement_party && (
                       <span className="text-xs text-indigo-500 font-medium">{project.agreement_party}</span>
                     )}
@@ -150,6 +163,8 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           onClose={() => setSelectedId(null)}
         />
       )}
+
+      <TodoPanel />
     </div>
   )
 }

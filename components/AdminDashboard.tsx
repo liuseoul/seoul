@@ -6,7 +6,7 @@ import Sidebar from './Sidebar'
 
 const STATUS_LABELS: Record<string, string> = {
   active: '进行中',
-  delayed: '已延期',
+  delayed: '已取消',
   completed: '已完成',
   cancelled: '未启动',
 }
