@@ -21,7 +21,7 @@ export default async function ProjectsPage() {
     .from('projects')
     .select(`
       id, name, client, description, status, created_at, updated_at,
-      agreement_party, service_fee_currency, collaboration_parties,
+      agreement_party, service_fee_currency, service_fee_amount, collaboration_parties,
       work_records(count),
       time_logs(started_at, finished_at)
     `)

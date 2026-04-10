@@ -29,6 +29,7 @@ export default function AdminDashboard({
   const [projStatus, setProjStatus] = useState('active')
   const [projAgreement, setProjAgreement] = useState('Deheng Beijing')
   const [projCurrency, setProjCurrency] = useState('CNY')
+  const [projAmount, setProjAmount] = useState('')
   const [collabParties, setCollabParties] = useState([''])
   const [projSaving, setProjSaving] = useState(false)
   const [projMsg, setProjMsg] = useState('')
@@ -80,6 +81,7 @@ export default function AdminDashboard({
       status: projStatus,
       agreement_party: projAgreement,
       service_fee_currency: projCurrency,
+      service_fee_amount: projAmount ? parseFloat(projAmount) : null,
       collaboration_parties: parties,
       created_by: user!.id,
     })
@@ -90,7 +92,7 @@ export default function AdminDashboard({
       setProjMsg('✅ 项目已创建')
       setProjName(''); setProjClient(''); setProjDesc('')
       setProjStatus('active'); setProjAgreement('Deheng Beijing')
-      setProjCurrency('CNY'); setCollabParties([''])
+      setProjCurrency('CNY'); setProjAmount(''); setCollabParties([''])
       setTimeout(() => router.refresh(), 800)
     }
     setProjSaving(false)
@@ -211,7 +213,7 @@ export default function AdminDashboard({
                     </select>
                   </div>
 
-                  {/* 服务费币种 */}
+                  {/* 服务费币种 + 金额 */}
                   <div>
                     <label className="block text-sm text-gray-700 mb-1">服务费币种</label>
                     <select value={projCurrency} onChange={e => setProjCurrency(e.target.value)} className="input-field">
@@ -219,6 +221,18 @@ export default function AdminDashboard({
                       <option value="KRW">KRW（韩元）</option>
                       <option value="USD">USD（美元）</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">服务费金额</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={projAmount}
+                      onChange={e => setProjAmount(e.target.value)}
+                      placeholder="可选"
+                      className="input-field"
+                    />
                   </div>
 
                   {/* 协作方 */}

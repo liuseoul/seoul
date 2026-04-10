@@ -183,6 +183,9 @@ export default function ProjectDetailPanel({
             {project.service_fee_currency && (
               <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium">
                 {project.service_fee_currency}
+                {project.service_fee_amount != null && (
+                  <> {Number(project.service_fee_amount).toLocaleString()}</>
+                )}
               </span>
             )}
           </div>

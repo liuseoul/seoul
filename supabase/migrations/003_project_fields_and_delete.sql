@@ -8,6 +8,7 @@ ALTER TABLE projects
     CHECK (agreement_party IN ('Deheng Beijing', 'Deheng Seoul')),
   ADD COLUMN IF NOT EXISTS service_fee_currency TEXT NOT NULL DEFAULT 'CNY'
     CHECK (service_fee_currency IN ('CNY', 'KRW', 'USD')),
+  ADD COLUMN IF NOT EXISTS service_fee_amount NUMERIC(15,2) DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS collaboration_parties TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 
 -- 2. Allow admin to permanently delete already-soft-deleted records
