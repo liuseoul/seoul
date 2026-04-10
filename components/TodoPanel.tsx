@@ -81,7 +81,7 @@ export default function TodoPanel() {
   )
 
   return (
-    <div className="w-60 bg-gray-50 border-l border-gray-200 flex flex-col h-full flex-shrink-0">
+    <div className="w-[480px] bg-gray-50 border-l border-gray-200 flex flex-col h-full flex-shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
         <h2 className="text-sm font-semibold text-gray-800">To Do</h2>
