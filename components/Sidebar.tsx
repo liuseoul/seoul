@@ -17,10 +17,10 @@ const TYPE_COLORS: Record<string, string> = {
   others:          'bg-gray-100 text-gray-600',
 }
 
-// Alternating row backgrounds for reminder list
+// Alternating backgrounds for active (upcoming) reminder rows
 const ROW_BG = ['bg-white', 'bg-gray-50']
 
-const MAX_VISIBLE = 10
+const MAX_UPCOMING = 10   // cap before "show more"
 
 type Reminder = {
   id: string
@@ -31,6 +31,9 @@ type Reminder = {
   end_time: string | null
   created_by: string
   created_at: string
+  deleted: boolean
+  deleted_by_name: string | null
+  deleted_at: string | null
   profiles?: { name: string }
 }
 
@@ -49,8 +52,8 @@ export default function Sidebar({ profile }: SidebarProps) {
   const now      = new Date()
   const todayStr = now.toISOString().split('T')[0]
 
-  const [reminders,    setReminders]    = useState<Reminder[]>([])
-  const [showAll,      setShowAll]      = useState(false)
+  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false)
 
   const [showAddRem,   setShowAddRem]   = useState(false)
   const [remDate,      setRemDate]      = useState(todayStr)
@@ -68,18 +71,39 @@ export default function Sidebar({ profile }: SidebarProps) {
   }, [])
 
   async function loadReminders() {
-    // Delete ALL past reminders (any user — RLS now permits this)
-    await supabase.from('reminders').delete().lt('due_date', todayStr)
-
-    // Only fetch today-onwards so past items can never leak through
+    // Fetch ALL reminders — no date filter, no auto-delete
+    // Past items and deleted items are kept for history
     const { data } = await supabase
       .from('reminders')
       .select('*, profiles(name)')
-      .gte('due_date', todayStr)          // ← double-guard: never show past dates
       .order('due_date', { ascending: true })
     setReminders(data || [])
   }
 
+  // ── Partition reminders into three groups ─────────────────
+  // 1. Upcoming (not deleted, due_date >= today) — primary list
+  // 2. Past     (not deleted, due_date < today)  — faded, strikethrough
+  // 3. Deleted  (deleted = true)                 — strikethrough + operator
+  const upcoming = reminders
+    .filter(r => !r.deleted && r.due_date >= todayStr)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+
+  const past = reminders
+    .filter(r => !r.deleted && r.due_date < todayStr)
+    .sort((a, b) => b.due_date.localeCompare(a.due_date))   // most recent past first
+
+  const deleted = reminders
+    .filter(r => r.deleted)
+    .sort((a, b) => {
+      const ta = a.deleted_at ?? a.due_date
+      const tb = b.deleted_at ?? b.due_date
+      return tb.localeCompare(ta)
+    })
+
+  const visibleUpcoming = showAllUpcoming ? upcoming : upcoming.slice(0, MAX_UPCOMING)
+  const hasMoreUpcoming = !showAllUpcoming && upcoming.length > MAX_UPCOMING
+
+  // ── Add reminder ──────────────────────────────────────────
   async function saveReminder() {
     if (!remDate || !remContent.trim()) { alert('请填写截止日期和内容'); return }
     if (remEndTime && remStartTime && remEndTime <= remStartTime) {
@@ -102,9 +126,17 @@ export default function Sidebar({ profile }: SidebarProps) {
     setRemType('others'); setRemStartTime(''); setRemEndTime('')
   }
 
-  async function deleteReminder(id: string) {
-    if (!confirm('确认删除该日程？')) return
-    const { error } = await supabase.from('reminders').delete().eq('id', id)
+  // ── Soft-delete reminder (records operator name) ──────────
+  async function softDeleteReminder(id: string) {
+    if (!confirm('确认删除该日程？删除后仍可在历史记录中查看。')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: prof } = await supabase
+      .from('profiles').select('name').eq('id', user!.id).single()
+    const { error } = await supabase.from('reminders').update({
+      deleted:          true,
+      deleted_by_name:  prof?.name || '未知',
+      deleted_at:       new Date().toISOString(),
+    }).eq('id', id)
     if (error) { alert('删除失败：' + error.message); return }
     setSelectedReminder(null)
     await loadReminders()
@@ -123,8 +155,82 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   function fmtTime(t: string | null) { return t ? t.slice(0, 5) : '' }
 
-  const visibleReminders = showAll ? reminders : reminders.slice(0, MAX_VISIBLE)
-  const hasMore = !showAll && reminders.length > MAX_VISIBLE
+  // ── Single reminder row ───────────────────────────────────
+  function ReminderRow({ r, index, variant }: {
+    r: Reminder
+    index: number
+    variant: 'upcoming' | 'past' | 'deleted'
+  }) {
+    const isToday = r.due_date === todayStr
+    const mm = r.due_date.slice(5, 7)
+    const dd = r.due_date.slice(8, 10)
+
+    const rowBg = variant === 'upcoming'
+      ? (isToday ? '' : ROW_BG[index % 2])
+      : ''
+
+    const containerCls =
+      variant === 'upcoming' && isToday
+        ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+        : variant === 'upcoming'
+        ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
+        : variant === 'past'
+        ? 'bg-gray-50 border-gray-100 opacity-60 hover:opacity-80'
+        : 'bg-red-50/40 border-red-100 opacity-50 hover:opacity-70'
+
+    return (
+      <button
+        onClick={() => setSelectedReminder(r)}
+        className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-all ${containerCls}`}
+      >
+        {/* Date */}
+        <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-9
+          ${variant === 'upcoming' && isToday ? 'text-amber-600'
+          : variant === 'upcoming' ? 'text-teal-600'
+          : 'text-gray-400'}`}>
+          {mm}/{dd}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          {/* Content */}
+          <span className={`text-sm leading-snug line-clamp-2 block
+            ${variant === 'deleted' ? 'line-through text-gray-400'
+            : variant === 'past'    ? 'line-through text-gray-500'
+            : isToday               ? 'text-amber-800 font-medium'
+            : 'text-gray-800'}`}>
+            {r.content}
+          </span>
+
+          {/* Meta row */}
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            {/* Type badge — only for upcoming */}
+            {variant === 'upcoming' && r.type && r.type !== 'others' && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded
+                ${TYPE_COLORS[r.type] || TYPE_COLORS.others}`}>
+                {TYPE_LABELS[r.type] || r.type}
+              </span>
+            )}
+            {/* Time range */}
+            {variant === 'upcoming' && r.start_time && (
+              <span className="text-[10px] text-gray-400">
+                {fmtTime(r.start_time)}{r.end_time ? `–${fmtTime(r.end_time)}` : ''}
+              </span>
+            )}
+            {/* Past label */}
+            {variant === 'past' && (
+              <span className="text-[10px] text-gray-400">已过期</span>
+            )}
+            {/* Deleted label with operator */}
+            {variant === 'deleted' && r.deleted_by_name && (
+              <span className="text-[10px] text-red-400">
+                已删除 · {r.deleted_by_name}
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+    )
+  }
 
   return (
     <>
@@ -169,71 +275,62 @@ export default function Sidebar({ profile }: SidebarProps) {
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
-            {reminders.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">暂无日程</p>
-            )}
 
-            {visibleReminders.map((r, idx) => {
-              const isToday = r.due_date === todayStr
-              const mm = r.due_date.slice(5, 7)
-              const dd = r.due_date.slice(8, 10)
-              const rowBg = isToday ? '' : ROW_BG[idx % 2]
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedReminder(r)}
-                  className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
-                    ${isToday
-                      ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
-                      : `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
-                    }`}
-                >
-                  <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-9
-                    ${isToday ? 'text-amber-600' : 'text-teal-600'}`}>
-                    {mm}/{dd}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className={`text-sm leading-snug line-clamp-2 block
-                      ${isToday ? 'text-amber-800 font-medium' : 'text-gray-800'}`}>
-                      {r.content}
-                    </span>
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      {r.type && r.type !== 'others' && (
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded
-                          ${TYPE_COLORS[r.type] || TYPE_COLORS.others}`}>
-                          {TYPE_LABELS[r.type] || r.type}
-                        </span>
-                      )}
-                      {r.start_time && (
-                        <span className="text-[10px] text-gray-400">
-                          {fmtTime(r.start_time)}{r.end_time ? `–${fmtTime(r.end_time)}` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
+            {/* ── Upcoming items ── */}
+            {visibleUpcoming.map((r, i) => (
+              <ReminderRow key={r.id} r={r} index={i} variant="upcoming" />
+            ))}
 
-            {/* Show more / collapse */}
-            {hasMore && (
+            {hasMoreUpcoming && (
               <button
-                onClick={() => setShowAll(true)}
+                onClick={() => setShowAllUpcoming(true)}
                 className="w-full py-1.5 text-xs text-gray-500 hover:text-teal-600
                            border border-dashed border-gray-300 hover:border-teal-400
                            rounded-lg transition-colors"
               >
-                查看更多（还有 {reminders.length - MAX_VISIBLE} 条）
+                查看更多（还有 {upcoming.length - MAX_UPCOMING} 条）
               </button>
             )}
-            {showAll && reminders.length > MAX_VISIBLE && (
+            {showAllUpcoming && upcoming.length > MAX_UPCOMING && (
               <button
-                onClick={() => setShowAll(false)}
+                onClick={() => setShowAllUpcoming(false)}
                 className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600
                            border border-dashed border-gray-200 rounded-lg transition-colors"
               >
                 收起
               </button>
+            )}
+
+            {/* ── Past items (faded strikethrough) ── */}
+            {past.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 pt-2 pb-1">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">已过期 {past.length}</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+                {past.map((r, i) => (
+                  <ReminderRow key={r.id} r={r} index={i} variant="past" />
+                ))}
+              </>
+            )}
+
+            {/* ── Deleted items (soft-deleted with operator) ── */}
+            {deleted.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 pt-2 pb-1">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">已删除 {deleted.length}</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+                {deleted.map((r, i) => (
+                  <ReminderRow key={r.id} r={r} index={i} variant="deleted" />
+                ))}
+              </>
+            )}
+
+            {reminders.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-4">暂无日程</p>
             )}
           </div>
         </div>
@@ -324,17 +421,37 @@ export default function Sidebar({ profile }: SidebarProps) {
               <button onClick={() => setSelectedReminder(null)}
                 className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
+
             <div className="space-y-3">
-              {selectedReminder.type && (
+              {/* Status badge for past/deleted */}
+              {selectedReminder.deleted ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-100 rounded-lg">
+                  <span className="text-xs text-red-500 font-semibold">已删除</span>
+                  {selectedReminder.deleted_by_name && (
+                    <span className="text-xs text-red-400">· 操作人：{selectedReminder.deleted_by_name}</span>
+                  )}
+                </div>
+              ) : selectedReminder.due_date < todayStr ? (
+                <div className="px-3 py-1.5 bg-gray-100 rounded-lg">
+                  <span className="text-xs text-gray-500 font-semibold">已过期</span>
+                </div>
+              ) : null}
+
+              {/* Type badge */}
+              {!selectedReminder.deleted && selectedReminder.type && selectedReminder.type !== 'others' && (
                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
                   ${TYPE_COLORS[selectedReminder.type] || TYPE_COLORS.others}`}>
                   {TYPE_LABELS[selectedReminder.type] || selectedReminder.type}
                 </span>
               )}
+
+              {/* Date */}
               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold
                 ${selectedReminder.due_date === todayStr
                   ? 'bg-amber-100 text-amber-700'
-                  : 'bg-teal-50 text-teal-700'}`}>
+                  : selectedReminder.due_date < todayStr || selectedReminder.deleted
+                    ? 'bg-gray-100 text-gray-500'
+                    : 'bg-teal-50 text-teal-700'}`}>
                 <span>📅</span>
                 <span>
                   {selectedReminder.due_date === todayStr ? '今天 · ' : ''}
@@ -343,6 +460,8 @@ export default function Sidebar({ profile }: SidebarProps) {
                   {selectedReminder.due_date.slice(8, 10)}
                 </span>
               </div>
+
+              {/* Time range */}
               {selectedReminder.start_time && (
                 <div className="flex items-center gap-1.5 text-sm text-gray-600">
                   <span>🕐</span>
@@ -352,21 +471,31 @@ export default function Sidebar({ profile }: SidebarProps) {
                   </span>
                 </div>
               )}
-              <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+
+              {/* Content */}
+              <p className={`text-sm leading-relaxed whitespace-pre-wrap
+                ${selectedReminder.deleted || selectedReminder.due_date < todayStr
+                  ? 'text-gray-400 line-through'
+                  : 'text-gray-800'}`}>
                 {selectedReminder.content}
               </p>
+
               {selectedReminder.profiles?.name && (
                 <p className="text-xs text-gray-400">创建人：{selectedReminder.profiles.name}</p>
               )}
             </div>
+
             <div className="flex gap-3 mt-5">
               <button onClick={() => setSelectedReminder(null)}
                 className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                 关闭
               </button>
-              {(isAdmin || selectedReminder.created_by === currentUserId) && (
-                <button onClick={() => deleteReminder(selectedReminder.id)}
-                  className="flex-1 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">
+              {/* Delete button only for non-deleted items; any member can soft-delete */}
+              {!selectedReminder.deleted && (
+                <button
+                  onClick={() => softDeleteReminder(selectedReminder.id)}
+                  className="flex-1 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                >
                   删除
                 </button>
               )}
