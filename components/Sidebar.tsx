@@ -17,6 +17,11 @@ const TYPE_COLORS: Record<string, string> = {
   others:          'bg-gray-100 text-gray-600',
 }
 
+// Alternating row backgrounds for reminder list
+const ROW_BG = ['bg-white', 'bg-gray-50']
+
+const MAX_VISIBLE = 10
+
 type Reminder = {
   id: string
   due_date: string
@@ -44,7 +49,8 @@ export default function Sidebar({ profile }: SidebarProps) {
   const now      = new Date()
   const todayStr = now.toISOString().split('T')[0]
 
-  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [reminders,    setReminders]    = useState<Reminder[]>([])
+  const [showAll,      setShowAll]      = useState(false)
 
   const [showAddRem,   setShowAddRem]   = useState(false)
   const [remDate,      setRemDate]      = useState(todayStr)
@@ -62,10 +68,14 @@ export default function Sidebar({ profile }: SidebarProps) {
   }, [])
 
   async function loadReminders() {
+    // Delete ALL past reminders (any user — RLS now permits this)
     await supabase.from('reminders').delete().lt('due_date', todayStr)
+
+    // Only fetch today-onwards so past items can never leak through
     const { data } = await supabase
       .from('reminders')
       .select('*, profiles(name)')
+      .gte('due_date', todayStr)          // ← double-guard: never show past dates
       .order('due_date', { ascending: true })
     setReminders(data || [])
   }
@@ -93,7 +103,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   }
 
   async function deleteReminder(id: string) {
-    if (!confirm('确认删除该提醒？')) return
+    if (!confirm('确认删除该日程？')) return
     const { error } = await supabase.from('reminders').delete().eq('id', id)
     if (error) { alert('删除失败：' + error.message); return }
     setSelectedReminder(null)
@@ -111,13 +121,13 @@ export default function Sidebar({ profile }: SidebarProps) {
     ...(isAdmin ? [{ href: '/admin', label: '管理后台', icon: '⚙️' }] : []),
   ]
 
-  function fmtTime(t: string | null) {
-    return t ? t.slice(0, 5) : ''
-  }
+  function fmtTime(t: string | null) { return t ? t.slice(0, 5) : '' }
+
+  const visibleReminders = showAll ? reminders : reminders.slice(0, MAX_VISIBLE)
+  const hasMore = !showAll && reminders.length > MAX_VISIBLE
 
   return (
     <>
-      {/* ── Sidebar shell — light theme matching project / todo panels ── */}
       <div className="w-56 bg-white border-r border-gray-200 text-gray-900 flex flex-col h-full flex-shrink-0">
 
         {/* Logo */}
@@ -145,7 +155,7 @@ export default function Sidebar({ profile }: SidebarProps) {
           ))}
         </nav>
 
-        {/* 日程安排 — fills all remaining space */}
+        {/* 日程安排 */}
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">日程安排</span>
@@ -158,36 +168,35 @@ export default function Sidebar({ profile }: SidebarProps) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1">
+          <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
             {reminders.length === 0 && (
               <p className="text-xs text-gray-400 text-center py-4">暂无日程</p>
             )}
-            {reminders.map(r => {
+
+            {visibleReminders.map((r, idx) => {
               const isToday = r.due_date === todayStr
               const mm = r.due_date.slice(5, 7)
               const dd = r.due_date.slice(8, 10)
+              const rowBg = isToday ? '' : ROW_BG[idx % 2]
               return (
                 <button
                   key={r.id}
                   onClick={() => setSelectedReminder(r)}
-                  className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg transition-colors
+                  className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
                     ${isToday
-                      ? 'bg-amber-50 border border-amber-300 hover:bg-amber-100'
-                      : 'hover:bg-gray-50 border border-transparent hover:border-gray-200'
+                      ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+                      : `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
                     }`}
                 >
-                  {/* Date */}
                   <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-9
                     ${isToday ? 'text-amber-600' : 'text-teal-600'}`}>
                     {mm}/{dd}
                   </span>
                   <div className="min-w-0 flex-1">
-                    {/* Content — increased to text-sm */}
                     <span className={`text-sm leading-snug line-clamp-2 block
                       ${isToday ? 'text-amber-800 font-medium' : 'text-gray-800'}`}>
                       {r.content}
                     </span>
-                    {/* Type + time meta */}
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       {r.type && r.type !== 'others' && (
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded
@@ -205,6 +214,27 @@ export default function Sidebar({ profile }: SidebarProps) {
                 </button>
               )
             })}
+
+            {/* Show more / collapse */}
+            {hasMore && (
+              <button
+                onClick={() => setShowAll(true)}
+                className="w-full py-1.5 text-xs text-gray-500 hover:text-teal-600
+                           border border-dashed border-gray-300 hover:border-teal-400
+                           rounded-lg transition-colors"
+              >
+                查看更多（还有 {reminders.length - MAX_VISIBLE} 条）
+              </button>
+            )}
+            {showAll && reminders.length > MAX_VISIBLE && (
+              <button
+                onClick={() => setShowAll(false)}
+                className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600
+                           border border-dashed border-gray-200 rounded-lg transition-colors"
+              >
+                收起
+              </button>
+            )}
           </div>
         </div>
 
@@ -235,7 +265,6 @@ export default function Sidebar({ profile }: SidebarProps) {
               <button onClick={() => { setShowAddRem(false); resetAddForm() }}
                 className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">类型</label>
@@ -251,12 +280,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                   ))}
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">截止日期</label>
                 <input type="date" value={remDate} onChange={e => setRemDate(e.target.value)} className="input-field" />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
@@ -267,14 +294,12 @@ export default function Sidebar({ profile }: SidebarProps) {
                   <input type="time" value={remEndTime} onChange={e => setRemEndTime(e.target.value)} className="input-field" />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">内容</label>
                 <textarea value={remContent} onChange={e => setRemContent(e.target.value)}
                   placeholder="日程内容…" rows={3} className="input-field resize-none" autoFocus />
               </div>
             </div>
-
             <div className="flex gap-3 mt-5">
               <button onClick={() => { setShowAddRem(false); resetAddForm() }}
                 className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -299,7 +324,6 @@ export default function Sidebar({ profile }: SidebarProps) {
               <button onClick={() => setSelectedReminder(null)}
                 className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
-
             <div className="space-y-3">
               {selectedReminder.type && (
                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
@@ -307,7 +331,6 @@ export default function Sidebar({ profile }: SidebarProps) {
                   {TYPE_LABELS[selectedReminder.type] || selectedReminder.type}
                 </span>
               )}
-
               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold
                 ${selectedReminder.due_date === todayStr
                   ? 'bg-amber-100 text-amber-700'
@@ -320,7 +343,6 @@ export default function Sidebar({ profile }: SidebarProps) {
                   {selectedReminder.due_date.slice(8, 10)}
                 </span>
               </div>
-
               {selectedReminder.start_time && (
                 <div className="flex items-center gap-1.5 text-sm text-gray-600">
                   <span>🕐</span>
@@ -330,16 +352,13 @@ export default function Sidebar({ profile }: SidebarProps) {
                   </span>
                 </div>
               )}
-
               <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
                 {selectedReminder.content}
               </p>
-
               {selectedReminder.profiles?.name && (
                 <p className="text-xs text-gray-400">创建人：{selectedReminder.profiles.name}</p>
               )}
             </div>
-
             <div className="flex gap-3 mt-5">
               <button onClick={() => setSelectedReminder(null)}
                 className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">

@@ -111,14 +111,21 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
   )
 
   // How many completed slots remain within the MAX_TOTAL cap
-  const completedSlots  = Math.max(0, MAX_TOTAL - uncompleted.length)
+  const completedSlots   = Math.max(0, MAX_TOTAL - uncompleted.length)
   const visibleCompleted = showAllCompleted ? completed : completed.slice(0, completedSlots)
   const hasMore          = !showAllCompleted && completed.length > completedSlots
 
-  function TodoRow({ todo }: { todo: Todo }) {
+  const PENDING_BG = ['bg-white', 'bg-gray-50']
+
+  function TodoRow({ todo, index, isPending }: { todo: Todo; index: number; isPending: boolean }) {
     const done = todo.completed
+    const rowBg = isPending ? PENDING_BG[index % 2] : ''
     return (
-      <div className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100">
+      <div className={`flex items-center gap-2 px-2 py-2 rounded-lg border transition-colors
+        ${isPending
+          ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
+          : 'border-transparent hover:bg-gray-100'
+        }`}>
         <button
           onClick={() => toggleDone(todo)}
           title={done ? '取消完成' : '标记完成'}
@@ -181,7 +188,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           <p className="text-xs text-gray-400 text-center py-8">暂无待办事项</p>
         )}
 
-        {uncompleted.map(todo => <TodoRow key={todo.id} todo={todo} />)}
+        {uncompleted.map((todo, idx) => <TodoRow key={todo.id} todo={todo} index={idx} isPending={true} />)}
 
         {completed.length > 0 && (
           <div className="pt-3 pb-1 flex items-center gap-2">
@@ -193,7 +200,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
 
-        {visibleCompleted.map(todo => <TodoRow key={todo.id} todo={todo} />)}
+        {visibleCompleted.map((todo, idx) => <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} />)}
 
         {/* "Show more" button — appears when completed items exceed the cap */}
         {hasMore && (
