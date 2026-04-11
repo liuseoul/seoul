@@ -168,7 +168,7 @@ export default function Sidebar({ profile }: SidebarProps) {
         {/* Reminders — fills all remaining space */}
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">提醒</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">日程安排</span>
             <button
               onClick={() => setShowAddRem(true)}
               className="text-xs text-slate-400 hover:text-white px-2 py-0.5 rounded border border-slate-700
