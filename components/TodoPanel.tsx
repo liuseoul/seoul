@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// Abbreviation → email mapping (used for parsing input)
 const ABBREV_EMAIL: Record<string, string> = {
   '刘': 'liupeng1@dehenglaw.com',
   '金': 'seoul@dehenglaw.com',
@@ -10,6 +9,9 @@ const ABBREV_EMAIL: Record<string, string> = {
   '祝': 'zhucuiying@dehenglaw.com',
 }
 const ABBREVS = Object.keys(ABBREV_EMAIL)
+
+// Max total items visible before "show more" kicks in for completed section
+const MAX_TOTAL = 25
 
 type Todo = {
   id: string
@@ -28,9 +30,7 @@ function parseItems(raw: string): { content: string; abbrev: string }[] {
     .map(s => s.trim())
     .filter(Boolean)
     .map(s => {
-      // Strip leading "1," etc.
       const cleaned = s.replace(/^\d+\s*[,，.、:：]\s*/, '').trim()
-      // Last character as assignee abbreviation
       const last = cleaned.slice(-1)
       if (ABBREVS.includes(last)) {
         return { content: cleaned.slice(0, -1).trim(), abbrev: last }
@@ -49,14 +49,13 @@ function fmtDate(iso: string) {
 
 export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
   const supabase = createClient()
-  const [todos,   setTodos]   = useState<Todo[]>([])
-  const [showAdd, setShowAdd] = useState(false)
-  const [input,   setInput]   = useState('')
-  const [saving,  setSaving]  = useState(false)
+  const [todos,            setTodos]            = useState<Todo[]>([])
+  const [showAdd,          setShowAdd]          = useState(false)
+  const [input,            setInput]            = useState('')
+  const [saving,           setSaving]           = useState(false)
+  const [showAllCompleted, setShowAllCompleted] = useState(false)
 
-  useEffect(() => {
-    loadTodos()
-  }, [])
+  useEffect(() => { loadTodos() }, [])
 
   async function loadTodos() {
     const { data } = await supabase
@@ -87,21 +86,14 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
 
   async function toggleDone(todo: Todo) {
     const nowDone = !todo.completed
-    const now = new Date().toISOString()
-
     if (nowDone) {
-      // Look up current user's name to record who completed it
       const { data: { user } } = await supabase.auth.getUser()
       const { data: profileData } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', user!.id)
-        .single()
-      const name = profileData?.name || ''
+        .from('profiles').select('name').eq('id', user!.id).single()
       await supabase.from('todos').update({
         completed: true,
-        completed_at: now,
-        completed_by_name: name,
+        completed_at: new Date().toISOString(),
+        completed_by_name: profileData?.name || '',
       }).eq('id', todo.id)
     } else {
       await supabase.from('todos').update({
@@ -118,12 +110,15 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
     new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime()
   )
 
-  // ── Row renderer ───────────────────────────────────────────
+  // How many completed slots remain within the MAX_TOTAL cap
+  const completedSlots  = Math.max(0, MAX_TOTAL - uncompleted.length)
+  const visibleCompleted = showAllCompleted ? completed : completed.slice(0, completedSlots)
+  const hasMore          = !showAllCompleted && completed.length > completedSlots
+
   function TodoRow({ todo }: { todo: Todo }) {
     const done = todo.completed
     return (
       <div className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100">
-        {/* Completion circle — clickable by all */}
         <button
           onClick={() => toggleDone(todo)}
           title={done ? '取消完成' : '标记完成'}
@@ -141,7 +136,6 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           )}
         </button>
 
-        {/* Content + assignee + date/completer — all on one line */}
         <div className="flex-1 min-w-0 flex items-baseline gap-1 flex-wrap">
           <span className={`text-sm leading-snug break-words
             ${done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
@@ -199,7 +193,30 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
 
-        {completed.map(todo => <TodoRow key={todo.id} todo={todo} />)}
+        {visibleCompleted.map(todo => <TodoRow key={todo.id} todo={todo} />)}
+
+        {/* "Show more" button — appears when completed items exceed the cap */}
+        {hasMore && (
+          <button
+            onClick={() => setShowAllCompleted(true)}
+            className="w-full mt-1 py-2 text-xs text-gray-500 hover:text-teal-600
+                       border border-dashed border-gray-300 hover:border-teal-400
+                       rounded-lg transition-colors"
+          >
+            查看更多（还有 {completed.length - completedSlots} 条）
+          </button>
+        )}
+
+        {/* Collapse button — when all are showing */}
+        {showAllCompleted && completed.length > completedSlots && (
+          <button
+            onClick={() => setShowAllCompleted(false)}
+            className="w-full mt-1 py-2 text-xs text-gray-400 hover:text-gray-600
+                       border border-dashed border-gray-200 rounded-lg transition-colors"
+          >
+            收起
+          </button>
+        )}
       </div>
 
       {/* Add Modal */}
