@@ -17,10 +17,10 @@ const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
 
 const ROW_COLORS = ['bg-white', 'bg-teal-50']
 
-function calcHours(logs: Array<{ started_at: string; finished_at: string | null }>) {
+function calcHours(logs: Array<{ started_at: string; finished_at: string | null; deleted?: boolean }>) {
   return logs
     .reduce((sum, log) => {
-      if (!log.finished_at) return sum
+      if (!log.finished_at || log.deleted) return sum
       return sum + (new Date(log.finished_at).getTime() - new Date(log.started_at).getTime()) / 3600000
     }, 0)
     .toFixed(1)

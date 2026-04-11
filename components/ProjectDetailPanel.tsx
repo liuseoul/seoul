@@ -136,8 +136,11 @@ export default function ProjectDetailPanel({
   async function softDeleteRecord(id: string) {
     if (!confirm('确认标记该记录为已删除？')) return
     const { data: { user } } = await supabase.auth.getUser()
+    const { data: prof } = await supabase.from('profiles').select('name').eq('id', user!.id).single()
     await supabase.from('work_records').update({
-      deleted: true, deleted_by: user!.id, deleted_at: new Date().toISOString(),
+      deleted: true, deleted_by: user!.id,
+      deleted_by_name: prof?.name || '未知',
+      deleted_at: new Date().toISOString(),
     }).eq('id', id)
     loadRecords()
   }
@@ -179,8 +182,11 @@ export default function ProjectDetailPanel({
   async function softDeleteTimeLog(id: string) {
     if (!confirm('确认标记该工时记录为已删除？')) return
     const { data: { user } } = await supabase.auth.getUser()
+    const { data: prof } = await supabase.from('profiles').select('name').eq('id', user!.id).single()
     await supabase.from('time_logs').update({
-      deleted: true, deleted_by: user!.id, deleted_at: new Date().toISOString(),
+      deleted: true, deleted_by: user!.id,
+      deleted_by_name: prof?.name || '未知',
+      deleted_at: new Date().toISOString(),
     }).eq('id', id)
     loadTimeLogs()
   }
@@ -302,7 +308,9 @@ export default function ProjectDetailPanel({
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-400">{formatDateOnly(r.created_at)}</span>
                       {r.deleted && (
-                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">已删除</span>
+                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                          已删除{r.deleted_by_name ? ` · ${r.deleted_by_name}` : ''}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -360,7 +368,9 @@ export default function ProjectDetailPanel({
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-semibold text-teal-600">{dur}</span>
                       {l.deleted && (
-                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">已删除</span>
+                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                          已删除{l.deleted_by_name ? ` · ${l.deleted_by_name}` : ''}
+                        </span>
                       )}
                     </div>
                   </div>
