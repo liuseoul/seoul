@@ -243,7 +243,7 @@ export default function ProjectDetailPanel({
             disabled={statusChanging}
             onChange={e => changeStatus(e.target.value)}
             className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white
-                       focus:outline-none focus:ring-1 focus:ring-blue-500"
+                       focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
             <option value="active">进行中</option>
             <option value="delayed">已取消</option>
@@ -260,7 +260,7 @@ export default function ProjectDetailPanel({
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2.5 text-sm font-medium transition-colors
-              ${tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              ${tab === t ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}
           >
             {t === 'records' ? '工作记录' : '工时记录'}
           </button>
@@ -278,8 +278,8 @@ export default function ProjectDetailPanel({
               <button
                 onClick={() => setShowAddRecord(true)}
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
-                           border border-blue-300 text-blue-600 text-sm font-medium
-                           hover:bg-blue-50 transition-colors"
+                           border border-teal-300 text-teal-600 text-sm font-medium
+                           hover:bg-teal-50 transition-colors"
               >
                 + 添加
               </button>
@@ -334,8 +334,8 @@ export default function ProjectDetailPanel({
               <button
                 onClick={() => setShowAddTime(true)}
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
-                           border border-blue-300 text-blue-600 text-sm font-medium
-                           hover:bg-blue-50 transition-colors"
+                           border border-teal-300 text-teal-600 text-sm font-medium
+                           hover:bg-teal-50 transition-colors"
               >
                 + 添加
               </button>
@@ -358,7 +358,7 @@ export default function ProjectDetailPanel({
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-xs font-medium text-gray-700">{l.profiles?.name || '未知'}</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-blue-600">{dur}</span>
+                      <span className="text-xs font-semibold text-teal-600">{dur}</span>
                       {l.deleted && (
                         <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">已删除</span>
                       )}
@@ -435,7 +435,7 @@ export default function ProjectDetailPanel({
               <button
                 onClick={saveRecord}
                 disabled={savingRecord || !recordContent.trim()}
-                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
               >
                 {savingRecord ? '保存中…' : '保存'}
@@ -477,9 +477,9 @@ export default function ProjectDetailPanel({
                   <input type="time" value={timeEnd} onChange={e => setTimeEnd(e.target.value)} className="input-field" />
                 </div>
               </div>
-              <div className="bg-blue-50 rounded-lg px-3 py-2 flex items-center justify-between">
+              <div className="bg-teal-50 rounded-lg px-3 py-2 flex items-center justify-between">
                 <span className="text-sm text-gray-600">合计时长</span>
-                <span className="text-sm font-semibold text-blue-700">{calcTotal(timeStart, timeEnd)}</span>
+                <span className="text-sm font-semibold text-teal-700">{calcTotal(timeStart, timeEnd)}</span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">工作内容</label>
@@ -503,7 +503,7 @@ export default function ProjectDetailPanel({
               <button
                 onClick={addTimeLog}
                 disabled={savingTime}
-                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
               >
                 {savingTime ? '保存中…' : '保存'}

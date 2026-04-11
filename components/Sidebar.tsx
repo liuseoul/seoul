@@ -3,15 +3,6 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-type ScheduleEntry = {
-  id: string
-  start_time: string
-  end_time: string
-  content: string
-  created_by: string
-}
-type ScheduleMap = Record<string, ScheduleEntry[]>
-
 type Reminder = {
   id: string
   due_date: string
@@ -19,58 +10,6 @@ type Reminder = {
   created_by: string
   created_at: string
   profiles?: { name: string }
-}
-
-// ── Mini Calendar ─────────────────────────────────────────────
-function MiniCalendar({
-  year, month, schedulesByDate, onDateClick,
-}: {
-  year: number
-  month: number
-  schedulesByDate: ScheduleMap
-  onDateClick: (dateStr: string) => void
-}) {
-  const firstDay    = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const today       = new Date()
-
-  const cells: (number | null)[] = []
-  for (let i = 0; i < firstDay; i++) cells.push(null)
-  for (let i = 1; i <= daysInMonth; i++) cells.push(i)
-
-  const dateStr = (day: number) =>
-    `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-
-  const hasEvent = (day: number) => (schedulesByDate[dateStr(day)] || []).length > 0
-
-  const isToday = (day: number) =>
-    today.getFullYear() === year && today.getMonth() === month && today.getDate() === day
-
-  return (
-    <div>
-      <div className="grid grid-cols-7 text-center mb-1">
-        {['日', '一', '二', '三', '四', '五', '六'].map(d => (
-          <div key={d} className="text-[9px] text-slate-500 py-0.5">{d}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 text-center">
-        {cells.map((day, i) => (
-          <div
-            key={i}
-            onClick={day && hasEvent(day) ? () => onDateClick(dateStr(day)) : undefined}
-            className={`text-[11px] py-1 leading-none rounded transition-colors
-              ${!day ? '' :
-                isToday(day) ? 'bg-blue-600 text-white font-bold' :
-                hasEvent(day) ? 'text-amber-400 font-semibold cursor-pointer hover:bg-slate-700' :
-                'text-slate-400'
-              }`}
-          >
-            {day || ''}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 // ── Sidebar ───────────────────────────────────────────────────
@@ -88,22 +27,6 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   const now = new Date()
   const todayStr = now.toISOString().split('T')[0]
-
-  // ── Calendar state
-  const [calYear,  setCalYear]  = useState(now.getFullYear())
-  const [calMonth, setCalMonth] = useState(now.getMonth())
-  const [schedulesByDate, setSchedulesByDate] = useState<ScheduleMap>({})
-
-  // ── Add schedule modal
-  const [showAddSch,  setShowAddSch]  = useState(false)
-  const [schDate,     setSchDate]     = useState(todayStr)
-  const [schStart,    setSchStart]    = useState('09:00')
-  const [schEnd,      setSchEnd]      = useState('10:00')
-  const [schContent,  setSchContent]  = useState('')
-  const [schSaving,   setSchSaving]   = useState(false)
-
-  // ── Calendar date click modal (view + delete schedules)
-  const [selectedCalDate, setSelectedCalDate] = useState<string | null>(null)
 
   // ── Reminders state
   const [reminders, setReminders] = useState<Reminder[]>([])
@@ -123,83 +46,12 @@ export default function Sidebar({ profile }: SidebarProps) {
     loadReminders()
   }, [])
 
-  useEffect(() => { loadSchedules() }, [calYear, calMonth])
-
-  async function loadSchedules() {
-    const pad   = (n: number) => String(n).padStart(2, '0')
-    const first = `${calYear}-${pad(calMonth + 1)}-01`
-    const last  = `${calYear}-${pad(calMonth + 1)}-${new Date(calYear, calMonth + 1, 0).getDate()}`
-
-    const { data } = await supabase
-      .from('schedules')
-      .select('id, date, start_time, end_time, content, created_by')
-      .gte('date', first)
-      .lte('date', last)
-
-    const map: ScheduleMap = {}
-    for (const r of (data || [])) {
-      if (!map[r.date]) map[r.date] = []
-      map[r.date].push({
-        id: r.id, start_time: r.start_time, end_time: r.end_time,
-        content: r.content, created_by: r.created_by,
-      })
-    }
-    setSchedulesByDate(map)
-  }
-
   async function loadReminders() {
     const { data } = await supabase
       .from('reminders')
       .select('*, profiles(name)')
       .order('due_date', { ascending: true })
     setReminders(data || [])
-  }
-
-  // ── Calendar nav ─────────────────────────────────────────
-  function prevMonth() {
-    const d = new Date(calYear, calMonth - 1)
-    setCalYear(d.getFullYear()); setCalMonth(d.getMonth())
-  }
-  function nextMonth() {
-    const d = new Date(calYear, calMonth + 1)
-    setCalYear(d.getFullYear()); setCalMonth(d.getMonth())
-  }
-
-  // ── Add schedule ─────────────────────────────────────────
-  async function saveSchedule() {
-    if (!schDate || !schStart || !schEnd || !schContent.trim()) {
-      alert('请填写完整信息'); return
-    }
-    if (schEnd <= schStart) { alert('结束时间必须晚于开始时间'); return }
-    setSchSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('schedules').insert({
-      date: schDate, start_time: schStart, end_time: schEnd,
-      content: schContent.trim(), created_by: user!.id,
-    })
-    if (error) { alert('保存失败：' + error.message) }
-    else {
-      setShowAddSch(false)
-      setSchContent('')
-      const d = new Date(schDate)
-      setCalYear(d.getFullYear())
-      setCalMonth(d.getMonth())
-      await loadSchedules()
-    }
-    setSchSaving(false)
-  }
-
-  // ── Delete schedule ──────────────────────────────────────
-  async function deleteSchedule(id: string) {
-    if (!confirm('确认删除该日程？')) return
-    const { error } = await supabase.from('schedules').delete().eq('id', id)
-    if (error) { alert('删除失败：' + error.message); return }
-    await loadSchedules()
-    // Refresh the selected date's entries (or close if none left)
-    if (selectedCalDate) {
-      const remaining = (schedulesByDate[selectedCalDate] || []).filter(s => s.id !== id)
-      if (remaining.length === 0) setSelectedCalDate(null)
-    }
   }
 
   // ── Add reminder ─────────────────────────────────────────
@@ -240,9 +92,6 @@ export default function Sidebar({ profile }: SidebarProps) {
     ...(isAdmin ? [{ href: '/admin', label: '管理后台', icon: '⚙️' }] : []),
   ]
 
-  // Entries for the currently selected calendar date
-  const selectedDateEntries = selectedCalDate ? (schedulesByDate[selectedCalDate] || []) : []
-
   return (
     <>
       <div className="w-56 bg-slate-900 text-white flex flex-col h-full flex-shrink-0">
@@ -250,7 +99,7 @@ export default function Sidebar({ profile }: SidebarProps) {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-slate-700 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0">D</div>
+            <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0">D</div>
             <div>
               <div className="text-sm font-semibold leading-tight">Deheng Seoul</div>
             </div>
@@ -264,7 +113,7 @@ export default function Sidebar({ profile }: SidebarProps) {
               key={item.href}
               onClick={() => router.push(item.href)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 text-left
-                ${pathname === item.href ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                ${pathname === item.href ? 'bg-teal-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
             >
               <span className="text-base">{item.icon}</span>
               <span>{item.label}</span>
@@ -272,33 +121,8 @@ export default function Sidebar({ profile }: SidebarProps) {
           ))}
         </nav>
 
-        {/* Mini Calendar */}
-        <div className="px-3 py-3 border-b border-slate-700 flex-shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <button onClick={prevMonth} className="text-slate-400 hover:text-white w-6 text-center text-sm">‹</button>
-            <span className="text-xs text-slate-300 font-medium">
-              {calYear} / {String(calMonth + 1).padStart(2, '0')}
-            </span>
-            <button onClick={nextMonth} className="text-slate-400 hover:text-white w-6 text-center text-sm">›</button>
-          </div>
-
-          <MiniCalendar
-            year={calYear} month={calMonth}
-            schedulesByDate={schedulesByDate}
-            onDateClick={setSelectedCalDate}
-          />
-
-          <button
-            onClick={() => setShowAddSch(true)}
-            className="w-full mt-3 py-1.5 text-xs font-medium rounded-lg border border-slate-600
-                       text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-          >
-            + 增加日程
-          </button>
-        </div>
-
-        {/* Reminders section — takes remaining space */}
-        <div className="flex-1 min-h-0 flex flex-col border-b border-slate-700">
+        {/* Reminders — fills all remaining space */}
+        <div className="flex-1 min-h-0 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">提醒</span>
@@ -348,7 +172,7 @@ export default function Sidebar({ profile }: SidebarProps) {
         </div>
 
         {/* User info & logout */}
-        <div className="px-3 py-4 flex-shrink-0">
+        <div className="px-3 py-4 border-t border-slate-700 flex-shrink-0">
           <div className="px-3 py-2 mb-1">
             <div className="text-sm font-medium text-white truncate">{profile?.name || 'User'}</div>
             <div className="text-xs text-slate-400 mt-0.5">
@@ -364,95 +188,6 @@ export default function Sidebar({ profile }: SidebarProps) {
           </button>
         </div>
       </div>
-
-      {/* ══ Add Schedule Modal ══════════════════════════════════ */}
-      {showAddSch && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold text-gray-900">增加日程</h3>
-              <button onClick={() => setShowAddSch(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
-                <input type="date" value={schDate} onChange={e => setSchDate(e.target.value)} className="input-field" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
-                  <input type="time" value={schStart} onChange={e => setSchStart(e.target.value)} className="input-field" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
-                  <input type="time" value={schEnd} onChange={e => setSchEnd(e.target.value)} className="input-field" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">内容</label>
-                <textarea value={schContent} onChange={e => setSchContent(e.target.value)}
-                  placeholder="日程内容…" rows={3} className="input-field resize-none" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddSch(false)}
-                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                取消
-              </button>
-              <button onClick={saveSchedule} disabled={schSaving}
-                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700
-                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
-                {schSaving ? '保存中…' : '保存'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ Calendar Date Detail Modal (click on event date) ═══ */}
-      {selectedCalDate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-900">
-                {selectedCalDate.slice(0, 4)}/{selectedCalDate.slice(5, 7)}/{selectedCalDate.slice(8, 10)} 日程
-              </h3>
-              <button onClick={() => setSelectedCalDate(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
-            </div>
-
-            <div className="space-y-3">
-              {selectedDateEntries
-                .sort((a, b) => a.start_time.localeCompare(b.start_time))
-                .map(entry => {
-                  const canDelete = isAdmin || entry.created_by === currentUserId
-                  return (
-                    <div key={entry.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-blue-600">
-                          {entry.start_time.slice(0, 5)} – {entry.end_time.slice(0, 5)}
-                        </div>
-                        <div className="text-sm text-gray-700 mt-0.5 leading-relaxed">{entry.content}</div>
-                      </div>
-                      {canDelete && (
-                        <button
-                          onClick={() => deleteSchedule(entry.id)}
-                          className="flex-shrink-0 text-xs text-red-400 hover:text-red-600 font-medium mt-0.5"
-                        >
-                          删除
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-            </div>
-
-            <button onClick={() => setSelectedCalDate(null)}
-              className="w-full mt-5 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              关闭
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ══ Add Reminder Modal ═════════════════════════════════ */}
       {showAddRem && (
@@ -479,7 +214,7 @@ export default function Sidebar({ profile }: SidebarProps) {
                 取消
               </button>
               <button onClick={saveReminder} disabled={remSaving}
-                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
                 {remSaving ? '保存中…' : '保存'}
               </button>
@@ -488,7 +223,7 @@ export default function Sidebar({ profile }: SidebarProps) {
         </div>
       )}
 
-      {/* ══ Reminder Detail Modal (click on reminder) ══════════ */}
+      {/* ══ Reminder Detail Modal ══════════════════════════════ */}
       {selectedReminder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -503,7 +238,7 @@ export default function Sidebar({ profile }: SidebarProps) {
                   ? 'bg-amber-100 text-amber-700'
                   : selectedReminder.due_date < todayStr
                     ? 'bg-gray-100 text-gray-500'
-                    : 'bg-blue-50 text-blue-700'
+                    : 'bg-teal-50 text-teal-700'
                 }`}>
                 <span>📅</span>
                 <span>

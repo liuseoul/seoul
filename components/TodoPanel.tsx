@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// Abbreviation → email mapping
+// Abbreviation → email mapping (used for parsing input)
 const ABBREV_EMAIL: Record<string, string> = {
   '刘': 'liupeng1@dehenglaw.com',
   '金': 'seoul@dehenglaw.com',
@@ -17,6 +17,7 @@ type Todo = {
   assignee_abbrev: string
   completed: boolean
   completed_at: string | null
+  completed_by_name: string | null
   position: number
   created_at: string
 }
@@ -48,23 +49,19 @@ function fmtDate(iso: string) {
 
 export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
   const supabase = createClient()
-  const [todos,     setTodos]     = useState<Todo[]>([])
-  const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [showAdd,   setShowAdd]   = useState(false)
-  const [input,     setInput]     = useState('')
-  const [saving,    setSaving]    = useState(false)
+  const [todos,   setTodos]   = useState<Todo[]>([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [input,   setInput]   = useState('')
+  const [saving,  setSaving]  = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserEmail(user?.email ?? null)
-    })
     loadTodos()
   }, [])
 
   async function loadTodos() {
     const { data } = await supabase
       .from('todos')
-      .select('id, content, assignee_abbrev, completed, completed_at, position, created_at')
+      .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at')
       .order('position', { ascending: true })
     setTodos(data || [])
   }
@@ -88,19 +85,31 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
     setSaving(false)
   }
 
-  function canComplete(todo: Todo) {
-    if (isAdmin) return true
-    if (!userEmail || !todo.assignee_abbrev) return false
-    return ABBREV_EMAIL[todo.assignee_abbrev] === userEmail
-  }
-
   async function toggleDone(todo: Todo) {
-    if (!canComplete(todo)) return
+    const nowDone = !todo.completed
     const now = new Date().toISOString()
-    await supabase.from('todos').update({
-      completed:    !todo.completed,
-      completed_at: !todo.completed ? now : null,
-    }).eq('id', todo.id)
+
+    if (nowDone) {
+      // Look up current user's name to record who completed it
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user!.id)
+        .single()
+      const name = profileData?.name || ''
+      await supabase.from('todos').update({
+        completed: true,
+        completed_at: now,
+        completed_by_name: name,
+      }).eq('id', todo.id)
+    } else {
+      await supabase.from('todos').update({
+        completed: false,
+        completed_at: null,
+        completed_by_name: null,
+      }).eq('id', todo.id)
+    }
     await loadTodos()
   }
 
@@ -111,21 +120,17 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
 
   // ── Row renderer ───────────────────────────────────────────
   function TodoRow({ todo }: { todo: Todo }) {
-    const able = canComplete(todo)
     const done = todo.completed
     return (
       <div className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100">
-        {/* Circle — half of previous w-7 → w-3.5 */}
+        {/* Completion circle — clickable by all */}
         <button
           onClick={() => toggleDone(todo)}
-          disabled={!able}
-          title={able ? (done ? '取消完成' : '标记完成') : '无操作权限'}
+          title={done ? '取消完成' : '标记完成'}
           className={`flex-shrink-0 w-3.5 h-3.5 rounded-full transition-colors
             ${done
-              ? 'bg-green-500 flex items-center justify-center hover:bg-gray-400'
-              : able
-                ? 'border-2 border-gray-400 hover:border-blue-500'
-                : 'border-2 border-gray-200 cursor-default'
+              ? 'bg-teal-500 flex items-center justify-center hover:bg-gray-400'
+              : 'border-2 border-gray-400 hover:border-teal-500'
             }`}
         >
           {done && (
@@ -136,7 +141,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           )}
         </button>
 
-        {/* Content + abbrev + date — all on one line */}
+        {/* Content + assignee + date/completer — all on one line */}
         <div className="flex-1 min-w-0 flex items-baseline gap-1 flex-wrap">
           <span className={`text-sm leading-snug break-words
             ${done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
@@ -144,13 +149,19 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           </span>
           {todo.assignee_abbrev && (
             <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
-              ${done ? 'text-gray-400' : 'text-indigo-500'}`}>
+              ${done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
               {todo.assignee_abbrev}
             </span>
           )}
-          <span className="text-[10px] text-gray-400 flex-shrink-0">
-            {fmtDate(todo.created_at)}
-          </span>
+          {done && todo.completed_by_name ? (
+            <span className="text-[10px] text-gray-400 flex-shrink-0">
+              ✓ {todo.completed_by_name}
+            </span>
+          ) : (
+            <span className="text-[10px] text-gray-400 flex-shrink-0">
+              {fmtDate(todo.created_at)}
+            </span>
+          )}
         </div>
       </div>
     )
@@ -163,7 +174,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
         <h2 className="text-sm font-semibold text-gray-800">To Do</h2>
         <button
           onClick={() => setShowAdd(true)}
-          className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium
+          className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium
                      px-3 py-1.5 rounded-lg transition-colors"
         >
           + 添加
@@ -216,24 +227,24 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
               placeholder="1,联系客户确认合同刘;2,准备庭审材料金"
               rows={4}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none
-                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                         focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent
                          placeholder:text-gray-300"
               autoFocus
             />
 
             {input.trim() && (
-              <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-blue-600 font-medium mb-1.5">
+              <div className="mt-3 p-3 bg-teal-50 rounded-lg">
+                <p className="text-xs text-teal-600 font-medium mb-1.5">
                   预览（{parseItems(input).length} 条）：
                 </p>
                 <ul className="space-y-1">
                   {parseItems(input).map((item, i) => (
                     <li key={i} className="text-xs text-gray-700 flex items-center gap-1.5">
-                      <span className="text-blue-400">○</span>
+                      <span className="text-teal-400">○</span>
                       <span>{item.content}</span>
                       {item.abbrev && (
-                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50
-                                         px-1 rounded">{item.abbrev}</span>
+                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50
+                                         px-1 rounded border border-teal-200">{item.abbrev}</span>
                       )}
                     </li>
                   ))}
@@ -248,8 +259,8 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
                 取消
               </button>
               <button onClick={saveTodos} disabled={saving || !input.trim()}
-                className="flex-1 py-2 text-sm font-medium text-white bg-blue-600
-                           hover:bg-blue-700 rounded-lg disabled:bg-gray-200
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600
+                           hover:bg-teal-700 rounded-lg disabled:bg-gray-200
                            disabled:text-gray-400 transition-colors">
                 {saving ? '保存中…' : '保存'}
               </button>

@@ -15,7 +15,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
 
-const ROW_COLORS = ['bg-white', 'bg-blue-50']
+const ROW_COLORS = ['bg-white', 'bg-teal-50']
 
 function calcHours(logs: Array<{ started_at: string; finished_at: string | null }>) {
   return logs
@@ -59,7 +59,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           {profile?.role === 'admin' && (
             <button
               onClick={() => router.push('/admin')}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white
+              className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
                          text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-150"
             >
               <span className="text-base leading-none">+</span>
@@ -76,7 +76,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
               onClick={() => setFilter(key)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
                 ${filter === key
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-teal-600 text-white shadow-sm'
                   : 'text-gray-600 hover:bg-gray-100'
                 }`}
             >
