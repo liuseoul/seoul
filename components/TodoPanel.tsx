@@ -2,16 +2,14 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-const ABBREV_EMAIL: Record<string, string> = {
-  '刘': 'liupeng1@dehenglaw.com',
-  '金': 'seoul@dehenglaw.com',
-  '汤': 'tangzy@dehenglaw.com',
-  '祝': 'zhucuiying@dehenglaw.com',
-}
-const ABBREVS = Object.keys(ABBREV_EMAIL)
+// Valid assignee abbreviations (used when parsing batch input)
+const ABBREVS = ['刘', '金', '汤', '祝']
 
-// Max total items visible before "show more" kicks in for completed section
+// Max visible before "show more" kicks in for the completed section
 const MAX_TOTAL = 25
+
+// Alternating backgrounds for pending items
+const PENDING_BG = ['bg-white', 'bg-gray-50']
 
 type Todo = {
   id: string
@@ -42,12 +40,11 @@ function parseItems(raw: string): { content: string; abbrev: string }[] {
 
 function fmtDate(iso: string) {
   const d = new Date(iso)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${mm}/${dd}`
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
 }
 
-export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
+// TodoPanel accepts no role prop — all members can complete any item
+export default function TodoPanel() {
   const supabase = createClient()
   const [todos,            setTodos]            = useState<Todo[]>([])
   const [showAdd,          setShowAdd]          = useState(false)
@@ -73,10 +70,10 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
     const maxPos = todos.length > 0 ? Math.max(...todos.map(t => t.position)) : -1
     const { error } = await supabase.from('todos').insert(
       items.map((item, i) => ({
-        content: item.content,
+        content:         item.content,
         assignee_abbrev: item.abbrev,
-        created_by: user!.id,
-        position: maxPos + 1 + i,
+        created_by:      user!.id,
+        position:        maxPos + 1 + i,
       }))
     )
     if (error) { alert('保存失败：' + error.message) }
@@ -85,47 +82,49 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function toggleDone(todo: Todo) {
-    const nowDone = !todo.completed
-    if (nowDone) {
+    if (!todo.completed) {
       const { data: { user } } = await supabase.auth.getUser()
-      const { data: profileData } = await supabase
+      const { data: prof } = await supabase
         .from('profiles').select('name').eq('id', user!.id).single()
       await supabase.from('todos').update({
-        completed: true,
-        completed_at: new Date().toISOString(),
-        completed_by_name: profileData?.name || '',
+        completed:          true,
+        completed_at:       new Date().toISOString(),
+        completed_by_name:  prof?.name || '',
       }).eq('id', todo.id)
     } else {
       await supabase.from('todos').update({
-        completed: false,
-        completed_at: null,
+        completed:         false,
+        completed_at:      null,
         completed_by_name: null,
       }).eq('id', todo.id)
     }
     await loadTodos()
   }
 
-  const uncompleted = todos.filter(t => !t.completed).sort((a, b) => a.position - b.position)
-  const completed   = todos.filter(t =>  t.completed).sort((a, b) =>
-    new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime()
-  )
+  const uncompleted = todos
+    .filter(t => !t.completed)
+    .sort((a, b) => a.position - b.position)
 
-  // How many completed slots remain within the MAX_TOTAL cap
+  const completed = todos
+    .filter(t => t.completed)
+    .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+
   const completedSlots   = Math.max(0, MAX_TOTAL - uncompleted.length)
   const visibleCompleted = showAllCompleted ? completed : completed.slice(0, completedSlots)
   const hasMore          = !showAllCompleted && completed.length > completedSlots
 
-  const PENDING_BG = ['bg-white', 'bg-gray-50']
-
+  // ── Row ────────────────────────────────────────────────────
   function TodoRow({ todo, index, isPending }: { todo: Todo; index: number; isPending: boolean }) {
-    const done = todo.completed
+    const done  = todo.completed
     const rowBg = isPending ? PENDING_BG[index % 2] : ''
     return (
       <div className={`flex items-center gap-2 px-2 py-2 rounded-lg border transition-colors
         ${isPending
           ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
           : 'border-transparent hover:bg-gray-100'
-        }`}>
+        }`}
+      >
+        {/* Circle */}
         <button
           onClick={() => toggleDone(todo)}
           title={done ? '取消完成' : '标记完成'}
@@ -143,6 +142,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           )}
         </button>
 
+        {/* Content row */}
         <div className="flex-1 min-w-0 flex items-baseline gap-1 flex-wrap">
           <span className={`text-sm leading-snug break-words
             ${done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
@@ -154,15 +154,12 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
               {todo.assignee_abbrev}
             </span>
           )}
-          {done && todo.completed_by_name ? (
-            <span className="text-[10px] text-gray-400 flex-shrink-0">
-              ✓ {todo.completed_by_name}
-            </span>
-          ) : (
-            <span className="text-[10px] text-gray-400 flex-shrink-0">
-              {fmtDate(todo.created_at)}
-            </span>
-          )}
+          <span className="text-[10px] text-gray-400 flex-shrink-0">
+            {done && todo.completed_by_name
+              ? `✓ ${todo.completed_by_name}`
+              : fmtDate(todo.created_at)
+            }
+          </span>
         </div>
       </div>
     )
@@ -170,6 +167,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="w-[480px] bg-gray-50 border-l border-gray-200 flex flex-col h-full flex-shrink-0">
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
         <h2 className="text-sm font-semibold text-gray-800">工作安排</h2>
@@ -183,12 +181,14 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {uncompleted.length === 0 && completed.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-8">暂无待办事项</p>
         )}
 
-        {uncompleted.map((todo, idx) => <TodoRow key={todo.id} todo={todo} index={idx} isPending={true} />)}
+        {uncompleted.map((todo, idx) => (
+          <TodoRow key={todo.id} todo={todo} index={idx} isPending={true} />
+        ))}
 
         {completed.length > 0 && (
           <div className="pt-3 pb-1 flex items-center gap-2">
@@ -200,9 +200,10 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
 
-        {visibleCompleted.map((todo, idx) => <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} />)}
+        {visibleCompleted.map((todo, idx) => (
+          <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} />
+        ))}
 
-        {/* "Show more" button — appears when completed items exceed the cap */}
         {hasMore && (
           <button
             onClick={() => setShowAllCompleted(true)}
@@ -214,7 +215,6 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
           </button>
         )}
 
-        {/* Collapse button — when all are showing */}
         {showAllCompleted && completed.length > completedSlots && (
           <button
             onClick={() => setShowAllCompleted(false)}
@@ -231,8 +231,9 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-900">添加待办事项</h3>
-              <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <h3 className="text-base font-semibold text-gray-900">添加工作安排</h3>
+              <button onClick={() => setShowAdd(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
 
             <p className="text-xs text-gray-500 mb-1 leading-relaxed">
@@ -242,7 +243,7 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
               1,联系客户刘;2,准备材料金;3,更新进度汤
             </p>
             <p className="text-[11px] text-gray-400 mb-3">
-              姓名缩写：刘（liupeng1）· 金（seoul）· 汤（tangzy）· 祝（zhucuiying）
+              姓名缩写：刘（刘鹏）· 金（金某）· 汤（汤某）· 祝（祝某）
             </p>
 
             <textarea
@@ -268,7 +269,9 @@ export default function TodoPanel({ isAdmin }: { isAdmin: boolean }) {
                       <span>{item.content}</span>
                       {item.abbrev && (
                         <span className="text-[10px] font-bold text-teal-600 bg-teal-50
-                                         px-1 rounded border border-teal-200">{item.abbrev}</span>
+                                         px-1 rounded border border-teal-200">
+                          {item.abbrev}
+                        </span>
                       )}
                     </li>
                   ))}
