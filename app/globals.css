@@ -48,11 +48,6 @@
     @apply p-3 rounded-lg border border-gray-100 bg-gray-50 mb-2;
   }
 
-  /* 计时条 */
-  .timer-bar {
-    @apply flex items-center justify-between px-4 py-2 bg-blue-600 text-white text-sm font-medium;
-  }
-
   /* 表单输入框 */
   .input-field {
     @apply w-full px-3 py-2 text-sm border border-gray-300 rounded-lg
