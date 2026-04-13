@@ -28,11 +28,14 @@ function calcTotal(start: string, end: string): string {
   const [eh, em] = end.split(':').map(Number)
   const totalMin = (eh * 60 + em) - (sh * 60 + sm)
   if (totalMin <= 0) return '—'
-  const h = Math.floor(totalMin / 60)
-  const m = totalMin % 60
-  if (h > 0 && m > 0) return `${h} 小时 ${m} 分钟`
-  if (h > 0) return `${h} 小时`
-  return `${m} 分钟`
+  return `${totalMin} 分钟`
+}
+
+function durMinutes(started: string, finished: string | null): string {
+  if (!finished) return '—'
+  const mins = Math.round((new Date(finished).getTime() - new Date(started).getTime()) / 60000)
+  if (mins <= 0) return '—'
+  return `${mins} 分钟`
 }
 
 function localDatetime(dateStr: string, timeStr: string): string {
@@ -365,9 +368,7 @@ export default function ProjectDetailPanel({
             {timeLogs.map((l: any) => {
               const canSoftDelete = !l.deleted
               const canHardDelete = l.deleted && isAdmin
-              const dur = l.finished_at
-                ? ((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000).toFixed(1) + ' 小时'
-                : '—'
+              const dur = durMinutes(l.started_at, l.finished_at)
 
               return (
                 <div key={l.id} className={`time-entry ${l.deleted ? 'opacity-50' : ''}`}>
@@ -479,14 +480,14 @@ export default function ProjectDetailPanel({
             {/* Summary bar */}
             {(() => {
               const nonDeleted = timeLogs.filter((l: any) => !l.deleted)
-              const totalHrs = nonDeleted.reduce((sum: number, l: any) => {
+              const totalMins = nonDeleted.reduce((sum: number, l: any) => {
                 if (!l.finished_at) return sum
-                return sum + (new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000
+                return sum + Math.round((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 60000)
               }, 0)
               return (
                 <div className="px-6 py-2.5 bg-teal-50 border-b border-teal-100 flex-shrink-0 flex items-center gap-4 text-sm">
                   <span className="text-teal-700">共 <strong>{nonDeleted.length}</strong> 条有效记录</span>
-                  <span className="text-teal-700">合计 <strong>{totalHrs.toFixed(1)}</strong> 小时</span>
+                  <span className="text-teal-700">合计 <strong>{totalMins}</strong> 分钟</span>
                 </div>
               )
             })()}
@@ -510,9 +511,7 @@ export default function ProjectDetailPanel({
                     {[...timeLogs]
                       .sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
                       .map((l: any) => {
-                        const dur = l.finished_at
-                          ? ((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000).toFixed(1) + 'h'
-                          : '—'
+                        const dur = durMinutes(l.started_at, l.finished_at)
                         const dateStr = new Date(l.started_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
                         const startStr = new Date(l.started_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
                         const endStr = l.finished_at

@@ -6,10 +6,13 @@ const ABBREVS = ['刘', '金', '汤', '祝']
 const MAX_TOTAL = 25
 const PENDING_BG = ['bg-white', 'bg-gray-50']
 
+type Member = { id: string; name: string }
+
 type Todo = {
   id: string
   content: string
   assignee_abbrev: string
+  assignee_abbrev_2: string | null
   completed: boolean
   completed_at: string | null
   completed_by_name: string | null
@@ -42,37 +45,66 @@ function fmtDate(iso: string) {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
 }
 
-// ── TodoRow — defined at module level so it is never recreated ─
-// (defining it inside the parent causes React to remount it on
-//  every keystroke, which jumps the cursor to position 0)
+/** First char of name used as the display abbreviation */
+function nameToAbbrev(name: string) { return name ? name.slice(0, 1) : '' }
+
+// ── MemberPicker — module-level to avoid remount on re-render ─
+function MemberPicker({ label, value, members, onChange }: {
+  label: string; value: string; members: Member[]; onChange: (name: string) => void
+}) {
+  return (
+    <div>
+      <span className="text-[11px] text-gray-400 mr-1">{label}</span>
+      <div className="inline-flex flex-wrap gap-1 mt-0.5">
+        <button type="button" onClick={() => onChange('')}
+          className={`text-[11px] px-1.5 py-0.5 rounded border transition-colors
+            ${value === '' ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>
+          无
+        </button>
+        {members.map(m => (
+          <button key={m.id} type="button" onClick={() => onChange(m.name)}
+            className={`text-[11px] px-1.5 py-0.5 rounded border transition-colors
+              ${value === m.name ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+            {m.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── TodoRow — module-level to keep stable DOM identity ────────
 interface TodoRowProps {
   todo: Todo
   index: number
   isPending: boolean
+  members: Member[]
   currentUserId: string | null
   isAdmin: boolean
   profileName: string | null
   editingId: string | null
   editContent: string
-  editAbbrev: string
+  editAssignee1: string   // member name ('' = unassigned)
+  editAssignee2: string
   editSaving: boolean
-  onSetEditContent: (v: string) => void
-  onSetEditAbbrev: (v: string) => void
-  onMarkDone: (todo: Todo) => void
-  onStartEdit: (todo: Todo) => void
-  onCancelEdit: () => void
-  onSaveEdit: (id: string) => void
-  onSoftDelete: (id: string) => void
+  onSetEditContent:   (v: string) => void
+  onSetEditAssignee1: (v: string) => void
+  onSetEditAssignee2: (v: string) => void
+  onMarkDone:         (todo: Todo) => void
+  onStartEdit:        (todo: Todo) => void
+  onCancelEdit:       () => void
+  onSaveEdit:         (id: string) => void
+  onSoftDelete:       (id: string) => void
   onRestoreCompleted: (todo: Todo) => void
-  onRestoreTodo: (id: string) => void
-  onHardDelete: (id: string) => void
+  onRestoreTodo:      (id: string) => void
+  onHardDelete:       (id: string) => void
 }
 
 function TodoRow({
-  todo, index, isPending,
+  todo, index, isPending, members,
   currentUserId, isAdmin, profileName,
-  editingId, editContent, editAbbrev, editSaving,
-  onSetEditContent, onSetEditAbbrev,
+  editingId, editContent, editAssignee1, editAssignee2, editSaving,
+  onSetEditContent, onSetEditAssignee1, onSetEditAssignee2,
   onMarkDone, onStartEdit, onCancelEdit, onSaveEdit,
   onSoftDelete, onRestoreCompleted, onRestoreTodo, onHardDelete,
 }: TodoRowProps) {
@@ -80,20 +112,19 @@ function TodoRow({
   const rowBg     = isPending ? PENDING_BG[index % 2] : ''
   const isEditing = editingId === todo.id
 
-  const canDelete          = isPending && !todo.deleted
-  const canRevise          = isPending && !todo.deleted && currentUserId === todo.created_by
-  const canRestore         = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
-  const canHardDel         = todo.deleted && isAdmin
+  const canDelete           = isPending && !todo.deleted
+  const canRevise           = isPending && !todo.deleted && currentUserId === todo.created_by
+  const canRestore          = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
+  const canHardDel          = todo.deleted && isAdmin
   const canHardDelCompleted = done && !todo.deleted && isAdmin
-  const canUncomplete      = done && !todo.deleted &&
+  const canUncomplete       = done && !todo.deleted &&
     ((profileName && profileName === todo.completed_by_name) || isAdmin)
 
   return (
     <div className={`flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
       ${isPending
         ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
-        : 'border-transparent hover:bg-gray-100'
-      }`}
+        : 'border-transparent hover:bg-gray-100'}`}
     >
       {/* Circle / tick / deleted marker */}
       {!todo.deleted && !done && (
@@ -113,10 +144,9 @@ function TodoRow({
 
       {/* Content area */}
       <div className="flex-1 min-w-0">
-
-        {/* ── Inline edit mode ── */}
         {isEditing ? (
-          <div className="space-y-1.5">
+          /* ── Inline edit mode ── */
+          <div className="space-y-2">
             <textarea
               value={editContent}
               onChange={e => onSetEditContent(e.target.value)}
@@ -125,17 +155,9 @@ function TodoRow({
               className="w-full text-sm border border-teal-400 rounded px-2 py-1 resize-none
                          focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-gray-400">负责人：</span>
-              <input
-                type="text"
-                value={editAbbrev}
-                onChange={e => onSetEditAbbrev(e.target.value.slice(0, 1))}
-                placeholder="缩写"
-                maxLength={1}
-                className="w-12 text-sm border border-gray-200 rounded px-1.5 py-0.5
-                           focus:outline-none focus:ring-1 focus:ring-teal-500 text-center"
-              />
+            <MemberPicker label="负责人1：" value={editAssignee1} members={members} onChange={onSetEditAssignee1} />
+            <MemberPicker label="负责人2：" value={editAssignee2} members={members} onChange={onSetEditAssignee2} />
+            <div className="flex gap-2">
               <button onClick={() => onSaveEdit(todo.id)} disabled={editSaving}
                 className="text-xs font-medium text-white bg-teal-600 hover:bg-teal-700
                            px-2.5 py-1 rounded transition-colors disabled:opacity-50">
@@ -162,6 +184,12 @@ function TodoRow({
                 {todo.assignee_abbrev}
               </span>
             )}
+            {todo.assignee_abbrev_2 && (
+              <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
+                ${todo.deleted || done ? 'text-gray-400 bg-gray-100' : 'text-indigo-600 bg-indigo-50'}`}>
+                {todo.assignee_abbrev_2}
+              </span>
+            )}
             <span className="text-[10px] text-gray-400 flex-shrink-0">
               {todo.deleted && todo.deleted_by_name
                 ? `已删除 · ${todo.deleted_by_name}`
@@ -171,39 +199,27 @@ function TodoRow({
             </span>
             {canRevise && (
               <button onClick={() => onStartEdit(todo)}
-                className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0">
-                修改
-              </button>
+                className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0">修改</button>
             )}
             {canDelete && (
               <button onClick={() => onSoftDelete(todo.id)}
-                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
-                删除
-              </button>
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">删除</button>
             )}
             {canUncomplete && (
               <button onClick={() => onRestoreCompleted(todo)}
-                className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
-                恢复
-              </button>
+                className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">恢复</button>
             )}
             {canHardDelCompleted && (
               <button onClick={() => onHardDelete(todo.id)}
-                className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
-                永久删除
-              </button>
+                className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">永久删除</button>
             )}
             {canRestore && (
               <button onClick={() => onRestoreTodo(todo.id)}
-                className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
-                恢复
-              </button>
+                className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">恢复</button>
             )}
             {canHardDel && (
               <button onClick={() => onHardDelete(todo.id)}
-                className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
-                永久删除
-              </button>
+                className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">永久删除</button>
             )}
           </div>
         )}
@@ -216,6 +232,7 @@ function TodoRow({
 export default function TodoPanel({ profile }: { profile: any }) {
   const supabase = createClient()
   const [todos,            setTodos]            = useState<Todo[]>([])
+  const [members,          setMembers]          = useState<Member[]>([])
   const [showAdd,          setShowAdd]          = useState(false)
   const [input,            setInput]            = useState('')
   const [saving,           setSaving]           = useState(false)
@@ -223,7 +240,8 @@ export default function TodoPanel({ profile }: { profile: any }) {
   const [currentUserId,    setCurrentUserId]    = useState<string | null>(null)
   const [editingId,        setEditingId]        = useState<string | null>(null)
   const [editContent,      setEditContent]      = useState('')
-  const [editAbbrev,       setEditAbbrev]       = useState('')
+  const [editAssignee1,    setEditAssignee1]    = useState('')  // member name
+  const [editAssignee2,    setEditAssignee2]    = useState('')  // member name
   const [editSaving,       setEditSaving]       = useState(false)
 
   const isAdmin = profile?.role === 'admin'
@@ -231,22 +249,27 @@ export default function TodoPanel({ profile }: { profile: any }) {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
     loadTodos()
+    loadMembers()
   }, [])
+
+  async function loadMembers() {
+    const { data } = await supabase.from('profiles').select('id, name').order('name')
+    setMembers(data || [])
+  }
 
   async function loadTodos() {
     const { data, error } = await supabase
       .from('todos')
-      .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by, deleted, deleted_by, deleted_by_name, deleted_at')
+      .select('id, content, assignee_abbrev, assignee_abbrev_2, completed, completed_at, completed_by_name, position, created_at, created_by, deleted, deleted_by, deleted_by_name, deleted_at')
       .order('created_at', { ascending: false })
 
     if (error) {
+      // Fallback: migration 019 not yet applied
       const { data: fallback } = await supabase
         .from('todos')
-        .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by')
+        .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by, deleted, deleted_by, deleted_by_name, deleted_at')
         .order('created_at', { ascending: false })
-      setTodos((fallback || []).map(t => ({
-        ...t, deleted: false, deleted_by: null, deleted_by_name: null, deleted_at: null,
-      })))
+      setTodos((fallback || []).map(t => ({ ...t, assignee_abbrev_2: null })))
       return
     }
     setTodos(data || [])
@@ -281,30 +304,32 @@ export default function TodoPanel({ profile }: { profile: any }) {
   }
 
   async function restoreCompleted(todo: Todo) {
-    await supabase.from('todos').update({
-      completed: false, completed_at: null, completed_by_name: null,
-    }).eq('id', todo.id)
+    await supabase.from('todos').update({ completed: false, completed_at: null, completed_by_name: null }).eq('id', todo.id)
     await loadTodos()
   }
 
   function startEdit(todo: Todo) {
     setEditingId(todo.id)
     setEditContent(todo.content)
-    setEditAbbrev(todo.assignee_abbrev || '')
+    // Reverse-map abbrev → member name (first member whose name starts with the abbrev)
+    const toName = (abbrev: string) =>
+      members.find(m => m.name.slice(0, 1) === abbrev)?.name || ''
+    setEditAssignee1(toName(todo.assignee_abbrev))
+    setEditAssignee2(toName(todo.assignee_abbrev_2 || ''))
   }
 
-  function cancelEdit() {
-    setEditingId(null); setEditContent(''); setEditAbbrev('')
-  }
+  function cancelEdit() { setEditingId(null); setEditContent(''); setEditAssignee1(''); setEditAssignee2('') }
 
   async function saveEdit(id: string) {
     if (!editContent.trim()) { alert('内容不能为空'); return }
     setEditSaving(true)
     const { error } = await supabase.from('todos').update({
-      content: editContent.trim(), assignee_abbrev: editAbbrev.trim(),
+      content:           editContent.trim(),
+      assignee_abbrev:   nameToAbbrev(editAssignee1),
+      assignee_abbrev_2: nameToAbbrev(editAssignee2) || null,
     }).eq('id', id)
     if (error) { alert('修改失败：' + error.message); setEditSaving(false); return }
-    setEditingId(null); setEditContent(''); setEditAbbrev('')
+    setEditingId(null); setEditContent(''); setEditAssignee1(''); setEditAssignee2('')
     setEditSaving(false)
     await loadTodos()
   }
@@ -347,30 +372,26 @@ export default function TodoPanel({ profile }: { profile: any }) {
 
   const deletedTodos = todos
     .filter(t => t.deleted)
-    .sort((a, b) => {
-      const ta = a.deleted_at ?? a.created_at
-      const tb = b.deleted_at ?? b.created_at
-      return new Date(tb).getTime() - new Date(ta).getTime()
-    })
+    .sort((a, b) => new Date(b.deleted_at ?? b.created_at).getTime() - new Date(a.deleted_at ?? a.created_at).getTime())
 
   const completedSlots   = Math.max(0, MAX_TOTAL - uncompleted.length)
   const visibleCompleted = showAllCompleted ? completed : completed.slice(0, completedSlots)
   const hasMore          = !showAllCompleted && completed.length > completedSlots
 
-  // Shared props passed to every TodoRow
   const rowProps = {
-    currentUserId, isAdmin, profileName: profile?.name || null,
-    editingId, editContent, editAbbrev, editSaving,
-    onSetEditContent: setEditContent,
-    onSetEditAbbrev:  setEditAbbrev,
-    onMarkDone:        markDone,
-    onStartEdit:       startEdit,
-    onCancelEdit:      cancelEdit,
-    onSaveEdit:        saveEdit,
-    onSoftDelete:      softDeleteTodo,
+    members, currentUserId, isAdmin, profileName: profile?.name || null,
+    editingId, editContent, editAssignee1, editAssignee2, editSaving,
+    onSetEditContent:   setEditContent,
+    onSetEditAssignee1: setEditAssignee1,
+    onSetEditAssignee2: setEditAssignee2,
+    onMarkDone:         markDone,
+    onStartEdit:        startEdit,
+    onCancelEdit:       cancelEdit,
+    onSaveEdit:         saveEdit,
+    onSoftDelete:       softDeleteTodo,
     onRestoreCompleted: restoreCompleted,
-    onRestoreTodo:     restoreTodo,
-    onHardDelete:      hardDeleteTodo,
+    onRestoreTodo:      restoreTodo,
+    onHardDelete:       hardDeleteTodo,
   }
 
   return (
@@ -422,7 +443,6 @@ export default function TodoPanel({ profile }: { profile: any }) {
           </button>
         )}
 
-        {/* Deleted section */}
         {deletedTodos.length > 0 && (
           <>
             <div className="pt-3 pb-1 flex items-center gap-2">
@@ -471,9 +491,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
                       <span className="text-teal-400">○</span>
                       <span>{item.content}</span>
                       {item.abbrev && (
-                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-1 rounded border border-teal-200">
-                          {item.abbrev}
-                        </span>
+                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-1 rounded border border-teal-200">{item.abbrev}</span>
                       )}
                     </li>
                   ))}
@@ -482,9 +500,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
             )}
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowAdd(false)}
-                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                取消
-              </button>
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
               <button onClick={saveTodos} disabled={saving || !input.trim()}
                 className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">

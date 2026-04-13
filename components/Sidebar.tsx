@@ -66,16 +66,26 @@ function remFullDateLabel(r: Reminder, today: string) {
   return sd === ed ? (sd === today ? '今天 · ' : '') + fmt(sd) : fmt(sd) + ' – ' + fmt(ed)
 }
 
-// ── Stats table (render function, not a component) ────────────
-function StatsTable({ loading, queried, records, todos, showOperator }: {
-  loading: boolean; queried: boolean; records: any[]; todos: any[]; showOperator: boolean
+// ── Stats table ───────────────────────────────────────────────
+function StatsTable({ loading, queried, records, timeLogs, todos, showOperator }: {
+  loading: boolean; queried: boolean
+  records: any[]; timeLogs: any[]; todos: any[]
+  showOperator: boolean
 }) {
   if (loading) return <p className="text-sm text-gray-400 text-center py-8">查询中…</p>
   if (!queried) return <p className="text-sm text-gray-400 text-center py-8">请选择日期后点击确认</p>
-  if (records.length === 0 && todos.length === 0)
+  if (records.length === 0 && timeLogs.length === 0 && todos.length === 0)
     return <p className="text-sm text-gray-400 text-center py-8">该日暂无记录</p>
+
+  function durMins(started: string, finished: string | null) {
+    if (!finished) return '—'
+    const m = Math.round((new Date(finished).getTime() - new Date(started).getTime()) / 60000)
+    return m > 0 ? `${m} 分钟` : '—'
+  }
+
   return (
     <div className="space-y-6">
+      {/* Work records */}
       {records.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-gray-700 mb-2">
@@ -101,6 +111,43 @@ function StatsTable({ loading, queried, records, todos, showOperator }: {
           </table>
         </div>
       )}
+
+      {/* Time logs */}
+      {timeLogs.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">
+            工时记录 <span className="text-gray-400 font-normal">({timeLogs.length})</span>
+          </h4>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-500">
+                <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-24">项目</th>
+                <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-20">时段</th>
+                <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-16">时长</th>
+                <th className="text-left px-2 py-1.5 border border-gray-200 font-medium">内容</th>
+                {showOperator && <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-14">操作人</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {timeLogs.map((l: any) => {
+                const startStr = new Date(l.started_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                const endStr   = l.finished_at ? new Date(l.finished_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'
+                return (
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="px-2 py-1.5 border border-gray-200 text-gray-600">{l.projects?.name || '—'}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 text-gray-500">{startStr}–{endStr}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 text-teal-600 font-semibold">{durMins(l.started_at, l.finished_at)}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 text-gray-800">{l.description || '—'}</td>
+                    {showOperator && <td className="px-2 py-1.5 border border-gray-200 text-gray-500">{l.profiles?.name || '—'}</td>}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Completed todos */}
       {todos.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-gray-700 mb-2">
@@ -176,6 +223,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [personalLoading,    setPersonalLoading]    = useState(false)
   const [personalQueried,    setPersonalQueried]    = useState(false)
   const [personalRecords,    setPersonalRecords]    = useState<any[]>([])
+  const [personalTimeLogs,   setPersonalTimeLogs]   = useState<any[]>([])
   const [personalTodos,      setPersonalTodos]      = useState<any[]>([])
 
   // ── Group daily stats (admin only) ────────────────────────
@@ -184,6 +232,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [groupLoading,   setGroupLoading]   = useState(false)
   const [groupQueried,   setGroupQueried]   = useState(false)
   const [groupRecords,   setGroupRecords]   = useState<any[]>([])
+  const [groupTimeLogs,  setGroupTimeLogs]  = useState<any[]>([])
   const [groupTodos,     setGroupTodos]     = useState<any[]>([])
 
   useEffect(() => {
@@ -304,18 +353,22 @@ export default function Sidebar({ profile }: SidebarProps) {
     if (!currentUserId) return
     setPersonalLoading(true); setPersonalQueried(true)
     const s = `${personalDate}T00:00:00.000Z`, e = `${personalDate}T23:59:59.999Z`
-    const [{ data: recs }, { data: tdos }] = await Promise.all([
+    const [{ data: recs }, { data: logs }, { data: tdos }] = await Promise.all([
       supabase.from('work_records')
         .select('id, content, created_at, projects(name)')
         .eq('author_id', currentUserId).eq('deleted', false)
         .gte('created_at', s).lte('created_at', e).order('created_at', { ascending: true }),
+      supabase.from('time_logs')
+        .select('id, started_at, finished_at, description, projects(name)')
+        .eq('member_id', currentUserId).eq('deleted', false)
+        .gte('started_at', s).lte('started_at', e).order('started_at', { ascending: true }),
       supabase.from('todos')
         .select('id, content, assignee_abbrev, completed_at, completed_by_name')
         .eq('completed', true).eq('deleted', false)
         .eq('completed_by_name', profile?.name || '')
         .gte('completed_at', s).lte('completed_at', e).order('completed_at', { ascending: true }),
     ])
-    setPersonalRecords(recs || []); setPersonalTodos(tdos || [])
+    setPersonalRecords(recs || []); setPersonalTimeLogs(logs || []); setPersonalTodos(tdos || [])
     setPersonalLoading(false)
   }
 
@@ -323,17 +376,21 @@ export default function Sidebar({ profile }: SidebarProps) {
   async function loadGroupStats() {
     setGroupLoading(true); setGroupQueried(true)
     const s = `${groupDate}T00:00:00.000Z`, e = `${groupDate}T23:59:59.999Z`
-    const [{ data: recs }, { data: tdos }] = await Promise.all([
+    const [{ data: recs }, { data: logs }, { data: tdos }] = await Promise.all([
       supabase.from('work_records')
         .select('id, content, created_at, profiles!work_records_author_id_fkey(name), projects(name)')
         .eq('deleted', false)
         .gte('created_at', s).lte('created_at', e).order('created_at', { ascending: true }),
+      supabase.from('time_logs')
+        .select('id, started_at, finished_at, description, profiles!time_logs_member_id_fkey(name), projects(name)')
+        .eq('deleted', false)
+        .gte('started_at', s).lte('started_at', e).order('started_at', { ascending: true }),
       supabase.from('todos')
         .select('id, content, assignee_abbrev, completed_at, completed_by_name')
         .eq('completed', true).eq('deleted', false)
         .gte('completed_at', s).lte('completed_at', e).order('completed_at', { ascending: true }),
     ])
-    setGroupRecords(recs || []); setGroupTodos(tdos || [])
+    setGroupRecords(recs || []); setGroupTimeLogs(logs || []); setGroupTodos(tdos || [])
     setGroupLoading(false)
   }
 
@@ -490,7 +547,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
           {/* Personal daily stats — visible to all */}
           <button
-            onClick={() => { setShowPersonalStats(true); setPersonalRecords([]); setPersonalTodos([]); setPersonalQueried(false) }}
+            onClick={() => { setShowPersonalStats(true); setPersonalRecords([]); setPersonalTimeLogs([]); setPersonalTodos([]); setPersonalQueried(false) }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150 text-left">
             <span className="text-base">📊</span><span>个人日统计</span>
           </button>
@@ -498,7 +555,7 @@ export default function Sidebar({ profile }: SidebarProps) {
           {/* Group daily stats — admin only */}
           {isAdmin && (
             <button
-              onClick={() => { setShowGroupStats(true); setGroupRecords([]); setGroupTodos([]); setGroupQueried(false) }}
+              onClick={() => { setShowGroupStats(true); setGroupRecords([]); setGroupTimeLogs([]); setGroupTodos([]); setGroupQueried(false) }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150 text-left">
               <span className="text-base">📊</span><span>团队日统计</span>
             </button>
@@ -740,12 +797,12 @@ export default function Sidebar({ profile }: SidebarProps) {
                 {personalLoading ? '查询中…' : '确认'}
               </button>
               {personalQueried && !personalLoading && (
-                <span className="text-xs text-gray-400">共 {personalRecords.length + personalTodos.length} 条</span>
+                <span className="text-xs text-gray-400">共 {personalRecords.length + personalTimeLogs.length + personalTodos.length} 条</span>
               )}
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
               <StatsTable loading={personalLoading} queried={personalQueried}
-                records={personalRecords} todos={personalTodos} showOperator={false} />
+                records={personalRecords} timeLogs={personalTimeLogs} todos={personalTodos} showOperator={false} />
             </div>
           </div>
         </div>
@@ -766,12 +823,12 @@ export default function Sidebar({ profile }: SidebarProps) {
                 {groupLoading ? '查询中…' : '确认'}
               </button>
               {groupQueried && !groupLoading && (
-                <span className="text-xs text-gray-400">共 {groupRecords.length + groupTodos.length} 条</span>
+                <span className="text-xs text-gray-400">共 {groupRecords.length + groupTimeLogs.length + groupTodos.length} 条</span>
               )}
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
               <StatsTable loading={groupLoading} queried={groupQueried}
-                records={groupRecords} todos={groupTodos} showOperator={true} />
+                records={groupRecords} timeLogs={groupTimeLogs} todos={groupTodos} showOperator={true} />
             </div>
           </div>
         </div>
