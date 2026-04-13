@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import Sidebar from './Sidebar'
 import ProjectDetailPanel from './ProjectDetailPanel'
 import TodoPanel from './TodoPanel'
@@ -26,58 +27,113 @@ function calcHours(logs: Array<{ started_at: string; finished_at: string | null;
     .toFixed(1)
 }
 
-function formatDate(iso: string) {
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 function formatShortDate(iso: string) {
   const d = new Date(iso)
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Returns the most-recent non-deleted activity across work_records + time_logs */
 function getLatestActivity(project: any): { label: string; operator: string } | null {
   const activities: { ts: number; label: string; operator: string }[] = []
-
   for (const r of project.work_records || []) {
     if (r.deleted) continue
-    activities.push({
-      ts:       new Date(r.created_at).getTime(),
-      label:    formatShortDate(r.created_at),
-      operator: r.profiles?.name || '',
-    })
+    activities.push({ ts: new Date(r.created_at).getTime(), label: formatShortDate(r.created_at), operator: r.profiles?.name || '' })
   }
   for (const l of project.time_logs || []) {
     if (l.deleted) continue
-    activities.push({
-      ts:       new Date(l.started_at).getTime(),
-      label:    formatShortDate(l.started_at),
-      operator: l.profiles?.name || '',
-    })
+    activities.push({ ts: new Date(l.started_at).getTime(), label: formatShortDate(l.started_at), operator: l.profiles?.name || '' })
   }
-
   if (activities.length === 0) return null
   activities.sort((a, b) => b.ts - a.ts)
   return { label: activities[0].label, operator: activities[0].operator }
 }
 
-export default function ProjectList({ projects, profile }: { projects: any[]; profile: any }) {
-  const [filter, setFilter]     = useState('all')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const router = useRouter()
+// ── Edit-form field type ──────────────────────────────────────
+type EditForm = {
+  name: string
+  client: string
+  description: string
+  agreement_party: string
+  service_fee_currency: string
+  service_fee_amount: string
+  collaboration_parties: string   // comma-separated
+  status: string
+}
 
-  // Sort: 已取消 (delayed) always sink to the bottom
+const EMPTY_FORM: EditForm = {
+  name: '', client: '', description: '', agreement_party: '',
+  service_fee_currency: '', service_fee_amount: '', collaboration_parties: '', status: 'active',
+}
+
+export default function ProjectList({ projects, profile }: { projects: any[]; profile: any }) {
+  const supabase   = createClient()
+  const router     = useRouter()
+  const isAdmin    = profile?.role === 'admin'
+
+  const [filter,     setFilter]     = useState('all')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // ── Revise modal ───────────────────────────────────────────
+  const [editProject, setEditProject] = useState<any | null>(null)
+  const [form,        setForm]        = useState<EditForm>(EMPTY_FORM)
+  const [saving,      setSaving]      = useState(false)
+
+  function openEdit(e: React.MouseEvent, project: any) {
+    e.stopPropagation()   // don't select the row
+    setEditProject(project)
+    setForm({
+      name:                  project.name || '',
+      client:                project.client || '',
+      description:           project.description || '',
+      agreement_party:       project.agreement_party || '',
+      service_fee_currency:  project.service_fee_currency || '',
+      service_fee_amount:    project.service_fee_amount != null ? String(project.service_fee_amount) : '',
+      collaboration_parties: (project.collaboration_parties as string[] | null)?.join('，') || '',
+      status:                project.status || 'active',
+    })
+  }
+
+  function closeEdit() { setEditProject(null); setForm(EMPTY_FORM) }
+
+  function setField(key: keyof EditForm, val: string) {
+    setForm(prev => ({ ...prev, [key]: val }))
+  }
+
+  async function saveEdit() {
+    if (!form.name.trim()) { alert('项目名称不能为空'); return }
+    setSaving(true)
+    const { error } = await supabase.from('projects').update({
+      name:                  form.name.trim(),
+      client:                form.client.trim() || null,
+      description:           form.description.trim() || null,
+      agreement_party:       form.agreement_party.trim() || null,
+      service_fee_currency:  form.service_fee_currency.trim() || null,
+      service_fee_amount:    form.service_fee_amount ? parseFloat(form.service_fee_amount) : null,
+      collaboration_parties: form.collaboration_parties
+        ? form.collaboration_parties.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+        : [],
+      status:                form.status,
+    }).eq('id', editProject.id)
+    setSaving(false)
+    if (error) { alert('保存失败：' + error.message); return }
+    closeEdit()
+    router.refresh()
+  }
+
+  // ── Layout helpers ─────────────────────────────────────────
   const sorted = (list: any[]) => [
     ...list.filter((p: any) => p.status !== 'delayed'),
     ...list.filter((p: any) => p.status === 'delayed'),
   ]
-
-  const filtered = sorted(
-    filter === 'all' ? projects : projects.filter((p: any) => p.status === filter)
-  )
-
+  const filtered    = sorted(filter === 'all' ? projects : projects.filter((p: any) => p.status === filter))
   const selectedProject = projects.find((p: any) => p.id === selectedId) || null
+
+  // Label map for the form status select
+  const STATUS_EDIT = [
+    { value: 'active',    label: '进行中' },
+    { value: 'completed', label: '已完成' },
+    { value: 'cancelled', label: '未启动' },
+    { value: 'delayed',   label: '已取消' },
+  ]
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -87,7 +143,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 flex-shrink-0">
           <h1 className="text-lg font-semibold text-gray-900">项目概览</h1>
-          {profile?.role === 'admin' && (
+          {isAdmin && (
             <button
               onClick={() => router.push('/admin')}
               className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
@@ -102,15 +158,9 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         {/* Status filter */}
         <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-gray-200 flex-shrink-0">
           {STATUS_ORDER.map(key => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
+            <button key={key} onClick={() => setFilter(key)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
-                ${filter === key
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100'
-                }`}
-            >
+                ${filter === key ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>
               {STATUS_LABELS[key]}
               {key !== 'all' && (
                 <span className="ml-1.5 text-xs opacity-70">
@@ -132,24 +182,35 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           )}
 
           {filtered.map((project: any, index: number) => {
-            const isCancelled  = project.status === 'delayed'
-            const recordCount  = (project.work_records || []).filter((r: any) => !r.deleted).length
-            const hours        = calcHours(project.time_logs || [])
-            const isSelected   = selectedId === project.id
-            const rowBg        = ROW_COLORS[index % 2]
-            const latestAct    = getLatestActivity(project)
+            const isCancelled = project.status === 'delayed'
+            const recordCount = (project.work_records || []).filter((r: any) => !r.deleted).length
+            const hours       = calcHours(project.time_logs || [])
+            const isSelected  = selectedId === project.id
+            const rowBg       = ROW_COLORS[index % 2]
+            const latestAct   = getLatestActivity(project)
 
             return (
               <div
                 key={project.id}
-                className={`project-row ${isSelected ? 'selected' : rowBg}
-                  ${isCancelled ? 'opacity-50' : ''}`}
+                className={`project-row ${isSelected ? 'selected' : rowBg} ${isCancelled ? 'opacity-50' : ''}`}
                 onClick={() => setSelectedId(isSelected ? null : project.id)}
               >
-                {/* Left: name + client */}
+                {/* Left: name + revise button + client */}
                 <div className="flex-1 min-w-0">
-                  <div className={`font-bold text-gray-900 truncate ${isCancelled ? 'line-through' : ''}`}>
-                    {project.name}
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold text-gray-900 truncate ${isCancelled ? 'line-through' : ''}`}>
+                      {project.name}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        onClick={e => openEdit(e, project)}
+                        className="flex-shrink-0 text-[11px] text-gray-400 hover:text-teal-600
+                                   border border-gray-200 hover:border-teal-400 rounded px-1.5 py-0.5
+                                   transition-colors leading-none"
+                      >
+                        修改
+                      </button>
+                    )}
                   </div>
                   <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-3 truncate">
                     <span className={isCancelled ? 'line-through' : ''}>
@@ -194,14 +255,147 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       </div>
 
       {selectedProject && (
-        <ProjectDetailPanel
-          project={selectedProject}
-          profile={profile}
-          onClose={() => setSelectedId(null)}
-        />
+        <ProjectDetailPanel project={selectedProject} profile={profile} onClose={() => setSelectedId(null)} />
       )}
 
       <TodoPanel profile={profile} />
+
+      {/* ══ Revise Project Modal ════════════════════════════════ */}
+      {editProject && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">修改项目信息</h3>
+              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            {/* Form */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  项目名称 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setField('name', e.target.value)}
+                  className="input-field"
+                  autoFocus
+                />
+              </div>
+
+              {/* Client */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">委托方</label>
+                <input
+                  type="text"
+                  value={form.client}
+                  onChange={e => setField('client', e.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              {/* Agreement party */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">协议方</label>
+                <input
+                  type="text"
+                  value={form.agreement_party}
+                  onChange={e => setField('agreement_party', e.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              {/* Service fee */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">服务费币种</label>
+                  <input
+                    type="text"
+                    value={form.service_fee_currency}
+                    onChange={e => setField('service_fee_currency', e.target.value)}
+                    placeholder="CNY / USD / KRW…"
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">服务费金额</label>
+                  <input
+                    type="number"
+                    value={form.service_fee_amount}
+                    onChange={e => setField('service_fee_amount', e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              {/* Collaboration parties */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">协作方</label>
+                <input
+                  type="text"
+                  value={form.collaboration_parties}
+                  onChange={e => setField('collaboration_parties', e.target.value)}
+                  placeholder="多个协作方用逗号分隔"
+                  className="input-field"
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STATUS_EDIT.map(s => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setField('status', s.value)}
+                      className={`py-1.5 px-3 text-sm rounded-lg border transition-colors text-left
+                        ${form.status === s.value
+                          ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                <textarea
+                  value={form.description}
+                  onChange={e => setField('description', e.target.value)}
+                  rows={3}
+                  className="input-field resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button
+                onClick={closeEdit}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={saving}
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+              >
+                {saving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
