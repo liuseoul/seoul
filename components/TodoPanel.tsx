@@ -56,6 +56,10 @@ export default function TodoPanel({ profile }: { profile: any }) {
   const [saving,           setSaving]           = useState(false)
   const [showAllCompleted, setShowAllCompleted] = useState(false)
   const [currentUserId,    setCurrentUserId]    = useState<string | null>(null)
+  const [editingId,        setEditingId]        = useState<string | null>(null)
+  const [editContent,      setEditContent]      = useState('')
+  const [editAbbrev,       setEditAbbrev]       = useState('')
+  const [editSaving,       setEditSaving]       = useState(false)
 
   const isAdmin = profile?.role === 'admin'
 
@@ -128,6 +132,33 @@ export default function TodoPanel({ profile }: { profile: any }) {
     await loadTodos()
   }
 
+  function startEdit(todo: Todo) {
+    setEditingId(todo.id)
+    setEditContent(todo.content)
+    setEditAbbrev(todo.assignee_abbrev || '')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditContent('')
+    setEditAbbrev('')
+  }
+
+  async function saveEdit(id: string) {
+    if (!editContent.trim()) { alert('内容不能为空'); return }
+    setEditSaving(true)
+    const { error } = await supabase.from('todos').update({
+      content:         editContent.trim(),
+      assignee_abbrev: editAbbrev.trim(),
+    }).eq('id', id)
+    if (error) { alert('修改失败：' + error.message); setEditSaving(false); return }
+    setEditingId(null)
+    setEditContent('')
+    setEditAbbrev('')
+    setEditSaving(false)
+    await loadTodos()
+  }
+
   async function softDeleteTodo(id: string) {
     if (!confirm('确认删除该待办事项？')) return
     const { data: { user } } = await supabase.auth.getUser()
@@ -191,32 +222,36 @@ export default function TodoPanel({ profile }: { profile: any }) {
     const rowBg = isPending ? PENDING_BG[index % 2] : ''
 
     // Soft-delete: any pending non-deleted item
-    const canDelete  = isPending && !todo.deleted
+    const canDelete    = isPending && !todo.deleted
+    // Revise: only the creator, pending non-deleted non-editing
+    const canRevise    = isPending && !todo.deleted && currentUserId === todo.created_by
     // Restore from soft-delete: deleter or admin
-    const canRestore = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
+    const canRestore   = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
     // Hard-delete: admin only
-    const canHardDel = todo.deleted && isAdmin
+    const canHardDel   = todo.deleted && isAdmin
     // Restore from completed: completer (by name) or admin
     const canUncomplete = done && !todo.deleted &&
       ((profile?.name && profile.name === todo.completed_by_name) || isAdmin)
 
+    const isEditing = editingId === todo.id
+
     return (
-      <div className={`flex items-center gap-2 px-2 py-2 rounded-lg border transition-colors
+      <div className={`flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
         ${isPending
           ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
           : 'border-transparent hover:bg-gray-100'
         }`}
       >
-        {/* Circle — marks pending items as done; completed items show static tick */}
+        {/* Circle */}
         {!todo.deleted && !done && (
           <button
             onClick={() => markDone(todo)}
             title="标记完成"
-            className="flex-shrink-0 w-3.5 h-3.5 rounded-full border-2 border-gray-400 hover:border-teal-500 transition-colors"
+            className="flex-shrink-0 mt-1 w-3.5 h-3.5 rounded-full border-2 border-gray-400 hover:border-teal-500 transition-colors"
           />
         )}
         {!todo.deleted && done && (
-          <span className="flex-shrink-0 w-3.5 h-3.5 rounded-full bg-teal-500 flex items-center justify-center">
+          <span className="flex-shrink-0 mt-1 w-3.5 h-3.5 rounded-full bg-teal-500 flex items-center justify-center">
             <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24"
               stroke="currentColor" strokeWidth={3.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -224,70 +259,122 @@ export default function TodoPanel({ profile }: { profile: any }) {
           </span>
         )}
         {todo.deleted && (
-          <span className="flex-shrink-0 w-3.5 h-3.5 text-[10px] text-red-300 flex items-center justify-center">✕</span>
+          <span className="flex-shrink-0 mt-1 w-3.5 h-3.5 text-[10px] text-red-300 flex items-center justify-center">✕</span>
         )}
 
-        {/* Content row */}
+        {/* Content area */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-1 flex-wrap">
-            <span className={`text-sm leading-snug break-words
-              ${todo.deleted ? 'line-through text-gray-400'
-              : done ? 'text-gray-400 line-through'
-              : 'text-gray-800'}`}>
-              {todo.content}
-            </span>
-            {todo.assignee_abbrev && (
-              <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
-                ${todo.deleted || done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
-                {todo.assignee_abbrev}
-              </span>
-            )}
-            <span className="text-[10px] text-gray-400 flex-shrink-0">
-              {todo.deleted && todo.deleted_by_name
-                ? `已删除 · ${todo.deleted_by_name}`
-                : done && todo.completed_by_name
-                ? `✓ ${todo.completed_by_name}`
-                : fmtDate(todo.created_at)
-              }
-            </span>
-          </div>
 
-          {/* Action buttons */}
-          {(canDelete || canRestore || canHardDel || canUncomplete) && (
-            <div className="flex gap-2 mt-0.5">
-              {canDelete && (
+          {/* ── Inline edit mode ── */}
+          {isEditing ? (
+            <div className="space-y-1.5">
+              <textarea
+                value={editContent}
+                onChange={e => setEditContent(e.target.value)}
+                rows={2}
+                autoFocus
+                className="w-full text-sm border border-teal-400 rounded px-2 py-1 resize-none
+                           focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400">负责人：</span>
+                <input
+                  type="text"
+                  value={editAbbrev}
+                  onChange={e => setEditAbbrev(e.target.value.slice(0, 1))}
+                  placeholder="缩写"
+                  maxLength={1}
+                  className="w-12 text-sm border border-gray-200 rounded px-1.5 py-0.5
+                             focus:outline-none focus:ring-1 focus:ring-teal-500 text-center"
+                />
                 <button
-                  onClick={() => softDeleteTodo(todo.id)}
-                  className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                  onClick={() => saveEdit(todo.id)}
+                  disabled={editSaving}
+                  className="text-xs font-medium text-white bg-teal-600 hover:bg-teal-700
+                             px-2.5 py-1 rounded transition-colors disabled:opacity-50"
                 >
-                  删除
+                  {editSaving ? '保存…' : '保存'}
                 </button>
-              )}
-              {canUncomplete && (
                 <button
-                  onClick={() => restoreCompleted(todo)}
-                  className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
+                  onClick={cancelEdit}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-1 transition-colors"
                 >
-                  恢复
+                  取消
                 </button>
-              )}
-              {canRestore && (
-                <button
-                  onClick={() => restoreTodo(todo.id)}
-                  className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
-                >
-                  恢复
-                </button>
-              )}
-              {canHardDel && (
-                <button
-                  onClick={() => hardDeleteTodo(todo.id)}
-                  className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium"
-                >
-                  永久删除
-                </button>
-              )}
+              </div>
             </div>
+          ) : (
+            /* ── Normal display mode ── */
+            <>
+              <div className="flex items-baseline gap-1 flex-wrap">
+                <span className={`text-sm leading-snug break-words
+                  ${todo.deleted ? 'line-through text-gray-400'
+                  : done ? 'text-gray-400 line-through'
+                  : 'text-gray-800'}`}>
+                  {todo.content}
+                </span>
+                {todo.assignee_abbrev && (
+                  <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
+                    ${todo.deleted || done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
+                    {todo.assignee_abbrev}
+                  </span>
+                )}
+                <span className="text-[10px] text-gray-400 flex-shrink-0">
+                  {todo.deleted && todo.deleted_by_name
+                    ? `已删除 · ${todo.deleted_by_name}`
+                    : done && todo.completed_by_name
+                    ? `✓ ${todo.completed_by_name}`
+                    : fmtDate(todo.created_at)
+                  }
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              {(canRevise || canDelete || canRestore || canHardDel || canUncomplete) && (
+                <div className="flex gap-2 mt-0.5">
+                  {canRevise && (
+                    <button
+                      onClick={() => startEdit(todo)}
+                      className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors"
+                    >
+                      修改
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      onClick={() => softDeleteTodo(todo.id)}
+                      className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      删除
+                    </button>
+                  )}
+                  {canUncomplete && (
+                    <button
+                      onClick={() => restoreCompleted(todo)}
+                      className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
+                    >
+                      恢复
+                    </button>
+                  )}
+                  {canRestore && (
+                    <button
+                      onClick={() => restoreTodo(todo.id)}
+                      className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
+                    >
+                      恢复
+                    </button>
+                  )}
+                  {canHardDel && (
+                    <button
+                      onClick={() => hardDeleteTodo(todo.id)}
+                      className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium"
+                    >
+                      永久删除
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
