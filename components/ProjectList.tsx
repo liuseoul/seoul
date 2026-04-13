@@ -120,10 +120,34 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   }
 
   // ── Layout helpers ─────────────────────────────────────────
-  const sorted = (list: any[]) => [
-    ...list.filter((p: any) => p.status !== 'delayed'),
-    ...list.filter((p: any) => p.status === 'delayed'),
-  ]
+  // Sort: 1st by most-recent non-deleted activity DESC, 2nd by created_at DESC
+  // 已取消 (delayed) always sink to bottom
+  function getMaxActivityTs(p: any): number {
+    let maxTs = 0
+    for (const r of p.work_records || []) {
+      if (r.deleted) continue
+      const ts = new Date(r.created_at).getTime()
+      if (ts > maxTs) maxTs = ts
+    }
+    for (const l of p.time_logs || []) {
+      if (l.deleted) continue
+      const ts = new Date(l.started_at).getTime()
+      if (ts > maxTs) maxTs = ts
+    }
+    return maxTs
+  }
+
+  const sorted = (list: any[]) => {
+    const active   = list.filter((p: any) => p.status !== 'delayed')
+    const delayed  = list.filter((p: any) => p.status === 'delayed')
+    active.sort((a: any, b: any) => {
+      const ta = getMaxActivityTs(a), tb = getMaxActivityTs(b)
+      if (ta !== tb) return tb - ta   // most recent activity first
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    return [...active, ...delayed]
+  }
+
   const filtered    = sorted(filter === 'all' ? projects : projects.filter((p: any) => p.status === filter))
   const selectedProject = projects.find((p: any) => p.id === selectedId) || null
 

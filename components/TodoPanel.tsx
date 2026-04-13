@@ -2,13 +2,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// Valid assignee abbreviations (used when parsing batch input)
 const ABBREVS = ['刘', '金', '汤', '祝']
-
-// Max visible before "show more" kicks in for the completed section
 const MAX_TOTAL = 25
-
-// Alternating backgrounds for pending items
 const PENDING_BG = ['bg-white', 'bg-gray-50']
 
 type Todo = {
@@ -27,6 +22,7 @@ type Todo = {
   deleted_at: string | null
 }
 
+// ── Helpers ──────────────────────────────────────────────────
 function parseItems(raw: string): { content: string; abbrev: string }[] {
   return raw
     .split(/[;；]/)
@@ -35,9 +31,7 @@ function parseItems(raw: string): { content: string; abbrev: string }[] {
     .map(s => {
       const cleaned = s.replace(/^\d+\s*[,，.、:：]\s*/, '').trim()
       const last = cleaned.slice(-1)
-      if (ABBREVS.includes(last)) {
-        return { content: cleaned.slice(0, -1).trim(), abbrev: last }
-      }
+      if (ABBREVS.includes(last)) return { content: cleaned.slice(0, -1).trim(), abbrev: last }
       return { content: cleaned, abbrev: '' }
     })
     .filter(item => Boolean(item.content))
@@ -48,6 +42,177 @@ function fmtDate(iso: string) {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
 }
 
+// ── TodoRow — defined at module level so it is never recreated ─
+// (defining it inside the parent causes React to remount it on
+//  every keystroke, which jumps the cursor to position 0)
+interface TodoRowProps {
+  todo: Todo
+  index: number
+  isPending: boolean
+  currentUserId: string | null
+  isAdmin: boolean
+  profileName: string | null
+  editingId: string | null
+  editContent: string
+  editAbbrev: string
+  editSaving: boolean
+  onSetEditContent: (v: string) => void
+  onSetEditAbbrev: (v: string) => void
+  onMarkDone: (todo: Todo) => void
+  onStartEdit: (todo: Todo) => void
+  onCancelEdit: () => void
+  onSaveEdit: (id: string) => void
+  onSoftDelete: (id: string) => void
+  onRestoreCompleted: (todo: Todo) => void
+  onRestoreTodo: (id: string) => void
+  onHardDelete: (id: string) => void
+}
+
+function TodoRow({
+  todo, index, isPending,
+  currentUserId, isAdmin, profileName,
+  editingId, editContent, editAbbrev, editSaving,
+  onSetEditContent, onSetEditAbbrev,
+  onMarkDone, onStartEdit, onCancelEdit, onSaveEdit,
+  onSoftDelete, onRestoreCompleted, onRestoreTodo, onHardDelete,
+}: TodoRowProps) {
+  const done      = todo.completed
+  const rowBg     = isPending ? PENDING_BG[index % 2] : ''
+  const isEditing = editingId === todo.id
+
+  const canDelete          = isPending && !todo.deleted
+  const canRevise          = isPending && !todo.deleted && currentUserId === todo.created_by
+  const canRestore         = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
+  const canHardDel         = todo.deleted && isAdmin
+  const canHardDelCompleted = done && !todo.deleted && isAdmin
+  const canUncomplete      = done && !todo.deleted &&
+    ((profileName && profileName === todo.completed_by_name) || isAdmin)
+
+  return (
+    <div className={`flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
+      ${isPending
+        ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
+        : 'border-transparent hover:bg-gray-100'
+      }`}
+    >
+      {/* Circle / tick / deleted marker */}
+      {!todo.deleted && !done && (
+        <button onClick={() => onMarkDone(todo)} title="标记完成"
+          className="flex-shrink-0 mt-1 w-3.5 h-3.5 rounded-full border-2 border-gray-400 hover:border-teal-500 transition-colors" />
+      )}
+      {!todo.deleted && done && (
+        <span className="flex-shrink-0 mt-1 w-3.5 h-3.5 rounded-full bg-teal-500 flex items-center justify-center">
+          <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </span>
+      )}
+      {todo.deleted && (
+        <span className="flex-shrink-0 mt-1 w-3.5 h-3.5 text-[10px] text-red-300 flex items-center justify-center">✕</span>
+      )}
+
+      {/* Content area */}
+      <div className="flex-1 min-w-0">
+
+        {/* ── Inline edit mode ── */}
+        {isEditing ? (
+          <div className="space-y-1.5">
+            <textarea
+              value={editContent}
+              onChange={e => onSetEditContent(e.target.value)}
+              rows={2}
+              autoFocus
+              className="w-full text-sm border border-teal-400 rounded px-2 py-1 resize-none
+                         focus:outline-none focus:ring-1 focus:ring-teal-500"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-400">负责人：</span>
+              <input
+                type="text"
+                value={editAbbrev}
+                onChange={e => onSetEditAbbrev(e.target.value.slice(0, 1))}
+                placeholder="缩写"
+                maxLength={1}
+                className="w-12 text-sm border border-gray-200 rounded px-1.5 py-0.5
+                           focus:outline-none focus:ring-1 focus:ring-teal-500 text-center"
+              />
+              <button onClick={() => onSaveEdit(todo.id)} disabled={editSaving}
+                className="text-xs font-medium text-white bg-teal-600 hover:bg-teal-700
+                           px-2.5 py-1 rounded transition-colors disabled:opacity-50">
+                {editSaving ? '保存…' : '保存'}
+              </button>
+              <button onClick={onCancelEdit}
+                className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-1 transition-colors">
+                取消
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── Normal display mode ── */
+          <div className="flex items-baseline gap-1 flex-wrap">
+            <span className={`text-sm leading-snug break-words
+              ${todo.deleted ? 'line-through text-gray-400'
+              : done ? 'text-gray-400 line-through'
+              : 'text-gray-800'}`}>
+              {todo.content}
+            </span>
+            {todo.assignee_abbrev && (
+              <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
+                ${todo.deleted || done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
+                {todo.assignee_abbrev}
+              </span>
+            )}
+            <span className="text-[10px] text-gray-400 flex-shrink-0">
+              {todo.deleted && todo.deleted_by_name
+                ? `已删除 · ${todo.deleted_by_name}`
+                : done && todo.completed_by_name
+                ? `✓ ${todo.completed_by_name}`
+                : fmtDate(todo.created_at)}
+            </span>
+            {canRevise && (
+              <button onClick={() => onStartEdit(todo)}
+                className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0">
+                修改
+              </button>
+            )}
+            {canDelete && (
+              <button onClick={() => onSoftDelete(todo.id)}
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                删除
+              </button>
+            )}
+            {canUncomplete && (
+              <button onClick={() => onRestoreCompleted(todo)}
+                className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
+                恢复
+              </button>
+            )}
+            {canHardDelCompleted && (
+              <button onClick={() => onHardDelete(todo.id)}
+                className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
+                永久删除
+              </button>
+            )}
+            {canRestore && (
+              <button onClick={() => onRestoreTodo(todo.id)}
+                className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
+                恢复
+              </button>
+            )}
+            {canHardDel && (
+              <button onClick={() => onHardDelete(todo.id)}
+                className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
+                永久删除
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main panel ───────────────────────────────────────────────
 export default function TodoPanel({ profile }: { profile: any }) {
   const supabase = createClient()
   const [todos,            setTodos]            = useState<Todo[]>([])
@@ -75,14 +240,12 @@ export default function TodoPanel({ profile }: { profile: any }) {
       .order('created_at', { ascending: false })
 
     if (error) {
-      // Migration 015 not yet applied — fall back to pre-soft-delete columns
       const { data: fallback } = await supabase
         .from('todos')
         .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by')
         .order('created_at', { ascending: false })
       setTodos((fallback || []).map(t => ({
-        ...t,
-        deleted: false, deleted_by: null, deleted_by_name: null, deleted_at: null,
+        ...t, deleted: false, deleted_by: null, deleted_by_name: null, deleted_at: null,
       })))
       return
     }
@@ -95,14 +258,11 @@ export default function TodoPanel({ profile }: { profile: any }) {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const maxPos = todos.filter(t => !t.deleted).length > 0
-      ? Math.max(...todos.filter(t => !t.deleted).map(t => t.position))
-      : -1
+      ? Math.max(...todos.filter(t => !t.deleted).map(t => t.position)) : -1
     const { error } = await supabase.from('todos').insert(
       items.map((item, i) => ({
-        content:         item.content,
-        assignee_abbrev: item.abbrev,
-        created_by:      user!.id,
-        position:        maxPos + 1 + i,
+        content: item.content, assignee_abbrev: item.abbrev,
+        created_by: user!.id, position: maxPos + 1 + i,
       }))
     )
     if (error) { alert('保存失败：' + error.message) }
@@ -113,21 +273,16 @@ export default function TodoPanel({ profile }: { profile: any }) {
   async function markDone(todo: Todo) {
     if (todo.deleted || todo.completed) return
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: prof } = await supabase
-      .from('profiles').select('name').eq('id', user!.id).single()
+    const { data: prof } = await supabase.from('profiles').select('name').eq('id', user!.id).single()
     await supabase.from('todos').update({
-      completed:          true,
-      completed_at:       new Date().toISOString(),
-      completed_by_name:  prof?.name || '',
+      completed: true, completed_at: new Date().toISOString(), completed_by_name: prof?.name || '',
     }).eq('id', todo.id)
     await loadTodos()
   }
 
   async function restoreCompleted(todo: Todo) {
     await supabase.from('todos').update({
-      completed:         false,
-      completed_at:      null,
-      completed_by_name: null,
+      completed: false, completed_at: null, completed_by_name: null,
     }).eq('id', todo.id)
     await loadTodos()
   }
@@ -139,22 +294,17 @@ export default function TodoPanel({ profile }: { profile: any }) {
   }
 
   function cancelEdit() {
-    setEditingId(null)
-    setEditContent('')
-    setEditAbbrev('')
+    setEditingId(null); setEditContent(''); setEditAbbrev('')
   }
 
   async function saveEdit(id: string) {
     if (!editContent.trim()) { alert('内容不能为空'); return }
     setEditSaving(true)
     const { error } = await supabase.from('todos').update({
-      content:         editContent.trim(),
-      assignee_abbrev: editAbbrev.trim(),
+      content: editContent.trim(), assignee_abbrev: editAbbrev.trim(),
     }).eq('id', id)
     if (error) { alert('修改失败：' + error.message); setEditSaving(false); return }
-    setEditingId(null)
-    setEditContent('')
-    setEditAbbrev('')
+    setEditingId(null); setEditContent(''); setEditAbbrev('')
     setEditSaving(false)
     await loadTodos()
   }
@@ -162,13 +312,10 @@ export default function TodoPanel({ profile }: { profile: any }) {
   async function softDeleteTodo(id: string) {
     if (!confirm('确认删除该待办事项？')) return
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: prof } = await supabase
-      .from('profiles').select('name').eq('id', user!.id).single()
+    const { data: prof } = await supabase.from('profiles').select('name').eq('id', user!.id).single()
     const { error } = await supabase.from('todos').update({
-      deleted:          true,
-      deleted_by:       user!.id,
-      deleted_by_name:  prof?.name || '未知',
-      deleted_at:       new Date().toISOString(),
+      deleted: true, deleted_by: user!.id,
+      deleted_by_name: prof?.name || '未知', deleted_at: new Date().toISOString(),
     }).eq('id', id)
     if (error) { alert('删除失败：' + error.message); return }
     await loadTodos()
@@ -176,10 +323,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
 
   async function restoreTodo(id: string) {
     const { error } = await supabase.from('todos').update({
-      deleted:          false,
-      deleted_by:       null,
-      deleted_by_name:  null,
-      deleted_at:       null,
+      deleted: false, deleted_by: null, deleted_by_name: null, deleted_at: null,
     }).eq('id', id)
     if (error) { alert('恢复失败：' + error.message); return }
     await loadTodos()
@@ -193,17 +337,14 @@ export default function TodoPanel({ profile }: { profile: any }) {
   }
 
   // ── Partitions ─────────────────────────────────────────────
-  // pending: not completed, not deleted — sorted newest-first
   const uncompleted = todos
     .filter(t => !t.completed && !t.deleted)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-  // completed: not deleted
   const completed = todos
     .filter(t => t.completed && !t.deleted)
     .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
 
-  // deleted (soft-deleted)
   const deletedTodos = todos
     .filter(t => t.deleted)
     .sort((a, b) => {
@@ -216,162 +357,20 @@ export default function TodoPanel({ profile }: { profile: any }) {
   const visibleCompleted = showAllCompleted ? completed : completed.slice(0, completedSlots)
   const hasMore          = !showAllCompleted && completed.length > completedSlots
 
-  // ── Row ────────────────────────────────────────────────────
-  function TodoRow({ todo, index, isPending }: { todo: Todo; index: number; isPending: boolean }) {
-    const done  = todo.completed
-    const rowBg = isPending ? PENDING_BG[index % 2] : ''
-
-    // Soft-delete: any pending non-deleted item
-    const canDelete    = isPending && !todo.deleted
-    // Revise: only the creator, pending non-deleted non-editing
-    const canRevise    = isPending && !todo.deleted && currentUserId === todo.created_by
-    // Restore from soft-delete: deleter or admin
-    const canRestore   = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
-    // Hard-delete soft-deleted items: admin only
-    const canHardDel   = todo.deleted && isAdmin
-    // Hard-delete completed items: admin only
-    const canHardDelCompleted = done && !todo.deleted && isAdmin
-    // Restore from completed: completer (by name) or admin
-    const canUncomplete = done && !todo.deleted &&
-      ((profile?.name && profile.name === todo.completed_by_name) || isAdmin)
-
-    const isEditing = editingId === todo.id
-
-    return (
-      <div className={`flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
-        ${isPending
-          ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
-          : 'border-transparent hover:bg-gray-100'
-        }`}
-      >
-        {/* Circle */}
-        {!todo.deleted && !done && (
-          <button
-            onClick={() => markDone(todo)}
-            title="标记完成"
-            className="flex-shrink-0 mt-1 w-3.5 h-3.5 rounded-full border-2 border-gray-400 hover:border-teal-500 transition-colors"
-          />
-        )}
-        {!todo.deleted && done && (
-          <span className="flex-shrink-0 mt-1 w-3.5 h-3.5 rounded-full bg-teal-500 flex items-center justify-center">
-            <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24"
-              stroke="currentColor" strokeWidth={3.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </span>
-        )}
-        {todo.deleted && (
-          <span className="flex-shrink-0 mt-1 w-3.5 h-3.5 text-[10px] text-red-300 flex items-center justify-center">✕</span>
-        )}
-
-        {/* Content area */}
-        <div className="flex-1 min-w-0">
-
-          {/* ── Inline edit mode ── */}
-          {isEditing ? (
-            <div className="space-y-1.5">
-              <textarea
-                value={editContent}
-                onChange={e => setEditContent(e.target.value)}
-                rows={2}
-                autoFocus
-                className="w-full text-sm border border-teal-400 rounded px-2 py-1 resize-none
-                           focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-400">负责人：</span>
-                <input
-                  type="text"
-                  value={editAbbrev}
-                  onChange={e => setEditAbbrev(e.target.value.slice(0, 1))}
-                  placeholder="缩写"
-                  maxLength={1}
-                  className="w-12 text-sm border border-gray-200 rounded px-1.5 py-0.5
-                             focus:outline-none focus:ring-1 focus:ring-teal-500 text-center"
-                />
-                <button
-                  onClick={() => saveEdit(todo.id)}
-                  disabled={editSaving}
-                  className="text-xs font-medium text-white bg-teal-600 hover:bg-teal-700
-                             px-2.5 py-1 rounded transition-colors disabled:opacity-50"
-                >
-                  {editSaving ? '保存…' : '保存'}
-                </button>
-                <button
-                  onClick={cancelEdit}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-1 transition-colors"
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* ── Normal display mode ── */
-            <>
-              {/* All inline — content · abbrev · date · action buttons; wraps automatically */}
-              <div className="flex items-baseline gap-1 flex-wrap">
-                <span className={`text-sm leading-snug break-words
-                  ${todo.deleted ? 'line-through text-gray-400'
-                  : done ? 'text-gray-400 line-through'
-                  : 'text-gray-800'}`}>
-                  {todo.content}
-                </span>
-                {todo.assignee_abbrev && (
-                  <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
-                    ${todo.deleted || done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
-                    {todo.assignee_abbrev}
-                  </span>
-                )}
-                <span className="text-[10px] text-gray-400 flex-shrink-0">
-                  {todo.deleted && todo.deleted_by_name
-                    ? `已删除 · ${todo.deleted_by_name}`
-                    : done && todo.completed_by_name
-                    ? `✓ ${todo.completed_by_name}`
-                    : fmtDate(todo.created_at)
-                  }
-                </span>
-                {canRevise && (
-                  <button onClick={() => startEdit(todo)}
-                    className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0">
-                    修改
-                  </button>
-                )}
-                {canDelete && (
-                  <button onClick={() => softDeleteTodo(todo.id)}
-                    className="text-[10px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
-                    删除
-                  </button>
-                )}
-                {canUncomplete && (
-                  <button onClick={() => restoreCompleted(todo)}
-                    className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
-                    恢复
-                  </button>
-                )}
-                {canHardDelCompleted && (
-                  <button onClick={() => hardDeleteTodo(todo.id)}
-                    className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
-                    永久删除
-                  </button>
-                )}
-                {canRestore && (
-                  <button onClick={() => restoreTodo(todo.id)}
-                    className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
-                    恢复
-                  </button>
-                )}
-                {canHardDel && (
-                  <button onClick={() => hardDeleteTodo(todo.id)}
-                    className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
-                    永久删除
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    )
+  // Shared props passed to every TodoRow
+  const rowProps = {
+    currentUserId, isAdmin, profileName: profile?.name || null,
+    editingId, editContent, editAbbrev, editSaving,
+    onSetEditContent: setEditContent,
+    onSetEditAbbrev:  setEditAbbrev,
+    onMarkDone:        markDone,
+    onStartEdit:       startEdit,
+    onCancelEdit:      cancelEdit,
+    onSaveEdit:        saveEdit,
+    onSoftDelete:      softDeleteTodo,
+    onRestoreCompleted: restoreCompleted,
+    onRestoreTodo:     restoreTodo,
+    onHardDelete:      hardDeleteTodo,
   }
 
   return (
@@ -380,11 +379,8 @@ export default function TodoPanel({ profile }: { profile: any }) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
         <h2 className="text-sm font-semibold text-gray-800">工作安排</h2>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium
-                     px-3 py-1.5 rounded-lg transition-colors"
-        >
+        <button onClick={() => setShowAdd(true)}
+          className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
           + 添加
         </button>
       </div>
@@ -396,56 +392,46 @@ export default function TodoPanel({ profile }: { profile: any }) {
         )}
 
         {uncompleted.map((todo, idx) => (
-          <TodoRow key={todo.id} todo={todo} index={idx} isPending={true} />
+          <TodoRow key={todo.id} todo={todo} index={idx} isPending={true} {...rowProps} />
         ))}
 
         {completed.length > 0 && (
           <div className="pt-3 pb-1 flex items-center gap-2">
             <div className="flex-1 h-px bg-gray-300" />
-            <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
-              已完成 {completed.length}
-            </span>
+            <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">已完成 {completed.length}</span>
             <div className="flex-1 h-px bg-gray-300" />
           </div>
         )}
 
         {visibleCompleted.map((todo, idx) => (
-          <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} />
+          <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} {...rowProps} />
         ))}
 
         {hasMore && (
-          <button
-            onClick={() => setShowAllCompleted(true)}
+          <button onClick={() => setShowAllCompleted(true)}
             className="w-full mt-1 py-2 text-xs text-gray-500 hover:text-teal-600
-                       border border-dashed border-gray-300 hover:border-teal-400
-                       rounded-lg transition-colors"
-          >
+                       border border-dashed border-gray-300 hover:border-teal-400 rounded-lg transition-colors">
             查看更多（还有 {completed.length - completedSlots} 条）
           </button>
         )}
-
         {showAllCompleted && completed.length > completedSlots && (
-          <button
-            onClick={() => setShowAllCompleted(false)}
+          <button onClick={() => setShowAllCompleted(false)}
             className="w-full mt-1 py-2 text-xs text-gray-400 hover:text-gray-600
-                       border border-dashed border-gray-200 rounded-lg transition-colors"
-          >
+                       border border-dashed border-gray-200 rounded-lg transition-colors">
             收起
           </button>
         )}
 
-        {/* ── Deleted section ── */}
+        {/* Deleted section */}
         {deletedTodos.length > 0 && (
           <>
             <div className="pt-3 pb-1 flex items-center gap-2">
               <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
-                已删除 {deletedTodos.length}
-              </span>
+              <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">已删除 {deletedTodos.length}</span>
               <div className="flex-1 h-px bg-gray-200" />
             </div>
             {deletedTodos.map((todo, idx) => (
-              <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} />
+              <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} {...rowProps} />
             ))}
           </>
         )}
@@ -457,20 +443,15 @@ export default function TodoPanel({ profile }: { profile: any }) {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-900">添加工作安排</h3>
-              <button onClick={() => setShowAdd(false)}
-                className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
-
-            <p className="text-xs text-gray-500 mb-1 leading-relaxed">
-              格式：编号,内容+姓名缩写；分号分隔多条
-            </p>
+            <p className="text-xs text-gray-500 mb-1 leading-relaxed">格式：编号,内容+姓名缩写；分号分隔多条</p>
             <p className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded mb-3">
               1,联系客户刘;2,准备材料金;3,更新进度汤
             </p>
             <p className="text-[11px] text-gray-400 mb-3">
               姓名缩写：刘（刘鹏）· 金（金某）· 汤（汤某）· 祝（祝某）
             </p>
-
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
@@ -481,20 +462,16 @@ export default function TodoPanel({ profile }: { profile: any }) {
                          placeholder:text-gray-300"
               autoFocus
             />
-
             {input.trim() && (
               <div className="mt-3 p-3 bg-teal-50 rounded-lg">
-                <p className="text-xs text-teal-600 font-medium mb-1.5">
-                  预览（{parseItems(input).length} 条）：
-                </p>
+                <p className="text-xs text-teal-600 font-medium mb-1.5">预览（{parseItems(input).length} 条）：</p>
                 <ul className="space-y-1">
                   {parseItems(input).map((item, i) => (
                     <li key={i} className="text-xs text-gray-700 flex items-center gap-1.5">
                       <span className="text-teal-400">○</span>
                       <span>{item.content}</span>
                       {item.abbrev && (
-                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50
-                                         px-1 rounded border border-teal-200">
+                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-1 rounded border border-teal-200">
                           {item.abbrev}
                         </span>
                       )}
@@ -503,17 +480,14 @@ export default function TodoPanel({ profile }: { profile: any }) {
                 </ul>
               </div>
             )}
-
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowAdd(false)}
-                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300
-                           rounded-lg hover:bg-gray-50 transition-colors">
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                 取消
               </button>
               <button onClick={saveTodos} disabled={saving || !input.trim()}
-                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600
-                           hover:bg-teal-700 rounded-lg disabled:bg-gray-200
-                           disabled:text-gray-400 transition-colors">
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
                 {saving ? '保存中…' : '保存'}
               </button>
             </div>
