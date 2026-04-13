@@ -106,24 +106,25 @@ export default function TodoPanel({ profile }: { profile: any }) {
     setSaving(false)
   }
 
-  async function toggleDone(todo: Todo) {
-    if (todo.deleted) return
-    if (!todo.completed) {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: prof } = await supabase
-        .from('profiles').select('name').eq('id', user!.id).single()
-      await supabase.from('todos').update({
-        completed:          true,
-        completed_at:       new Date().toISOString(),
-        completed_by_name:  prof?.name || '',
-      }).eq('id', todo.id)
-    } else {
-      await supabase.from('todos').update({
-        completed:         false,
-        completed_at:      null,
-        completed_by_name: null,
-      }).eq('id', todo.id)
-    }
+  async function markDone(todo: Todo) {
+    if (todo.deleted || todo.completed) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: prof } = await supabase
+      .from('profiles').select('name').eq('id', user!.id).single()
+    await supabase.from('todos').update({
+      completed:          true,
+      completed_at:       new Date().toISOString(),
+      completed_by_name:  prof?.name || '',
+    }).eq('id', todo.id)
+    await loadTodos()
+  }
+
+  async function restoreCompleted(todo: Todo) {
+    await supabase.from('todos').update({
+      completed:         false,
+      completed_at:      null,
+      completed_by_name: null,
+    }).eq('id', todo.id)
     await loadTodos()
   }
 
@@ -189,9 +190,15 @@ export default function TodoPanel({ profile }: { profile: any }) {
     const done  = todo.completed
     const rowBg = isPending ? PENDING_BG[index % 2] : ''
 
+    // Soft-delete: any pending non-deleted item
     const canDelete  = isPending && !todo.deleted
+    // Restore from soft-delete: deleter or admin
     const canRestore = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
+    // Hard-delete: admin only
     const canHardDel = todo.deleted && isAdmin
+    // Restore from completed: completer (by name) or admin
+    const canUncomplete = done && !todo.deleted &&
+      ((profile?.name && profile.name === todo.completed_by_name) || isAdmin)
 
     return (
       <div className={`flex items-center gap-2 px-2 py-2 rounded-lg border transition-colors
@@ -200,24 +207,21 @@ export default function TodoPanel({ profile }: { profile: any }) {
           : 'border-transparent hover:bg-gray-100'
         }`}
       >
-        {/* Circle */}
-        {!todo.deleted && (
+        {/* Circle — marks pending items as done; completed items show static tick */}
+        {!todo.deleted && !done && (
           <button
-            onClick={() => toggleDone(todo)}
-            title={done ? '取消完成' : '标记完成'}
-            className={`flex-shrink-0 w-3.5 h-3.5 rounded-full transition-colors
-              ${done
-                ? 'bg-teal-500 flex items-center justify-center hover:bg-gray-400'
-                : 'border-2 border-gray-400 hover:border-teal-500'
-              }`}
-          >
-            {done && (
-              <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor" strokeWidth={3.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </button>
+            onClick={() => markDone(todo)}
+            title="标记完成"
+            className="flex-shrink-0 w-3.5 h-3.5 rounded-full border-2 border-gray-400 hover:border-teal-500 transition-colors"
+          />
+        )}
+        {!todo.deleted && done && (
+          <span className="flex-shrink-0 w-3.5 h-3.5 rounded-full bg-teal-500 flex items-center justify-center">
+            <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor" strokeWidth={3.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
         )}
         {todo.deleted && (
           <span className="flex-shrink-0 w-3.5 h-3.5 text-[10px] text-red-300 flex items-center justify-center">✕</span>
@@ -249,7 +253,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
           </div>
 
           {/* Action buttons */}
-          {(canDelete || canRestore || canHardDel) && (
+          {(canDelete || canRestore || canHardDel || canUncomplete) && (
             <div className="flex gap-2 mt-0.5">
               {canDelete && (
                 <button
@@ -257,6 +261,14 @@ export default function TodoPanel({ profile }: { profile: any }) {
                   className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
                 >
                   删除
+                </button>
+              )}
+              {canUncomplete && (
+                <button
+                  onClick={() => restoreCompleted(todo)}
+                  className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
+                >
+                  恢复
                 </button>
               )}
               {canRestore && (

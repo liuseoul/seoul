@@ -34,6 +34,7 @@ type Reminder = {
   created_by: string
   created_at: string
   deleted: boolean
+  deleted_by: string | null
   deleted_by_name: string | null
   deleted_at: string | null
   profiles?: { name: string }
@@ -79,6 +80,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const supabase = createClient()
 
   const isAdmin = profile?.role === 'admin'
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   const now      = new Date()
   const todayStr = now.toISOString().split('T')[0]
@@ -107,6 +109,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [statsTodos,      setStatsTodos]      = useState<any[]>([])
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
     loadReminders()
   }, [])
 
@@ -177,10 +180,24 @@ export default function Sidebar({ profile }: SidebarProps) {
       .from('profiles').select('name').eq('id', user!.id).single()
     const { error } = await supabase.from('reminders').update({
       deleted:          true,
+      deleted_by:       user!.id,
       deleted_by_name:  prof?.name || '未知',
       deleted_at:       new Date().toISOString(),
     }).eq('id', id)
     if (error) { alert('删除失败：' + error.message); return }
+    setSelectedReminder(null)
+    await loadReminders()
+  }
+
+  // ── Restore reminder (deleter or admin) ──────────────────
+  async function restoreReminder(id: string) {
+    const { error } = await supabase.from('reminders').update({
+      deleted:          false,
+      deleted_by:       null,
+      deleted_by_name:  null,
+      deleted_at:       null,
+    }).eq('id', id)
+    if (error) { alert('恢复失败：' + error.message); return }
     setSelectedReminder(null)
     await loadReminders()
   }
@@ -616,6 +633,16 @@ export default function Sidebar({ profile }: SidebarProps) {
                   className="flex-1 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                 >
                   删除
+                </button>
+              )}
+              {/* Restore: deleter or admin */}
+              {selectedReminder.deleted &&
+                (currentUserId === selectedReminder.deleted_by || isAdmin) && (
+                <button
+                  onClick={() => restoreReminder(selectedReminder.id)}
+                  className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+                >
+                  恢复
                 </button>
               )}
               {/* Hard-delete: admin only, already soft-deleted */}

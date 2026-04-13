@@ -138,11 +138,12 @@ export default function ProjectDetailPanel({
     if (!confirm('确认标记该记录为已删除？')) return
     const { data: { user } } = await supabase.auth.getUser()
     const { data: prof } = await supabase.from('profiles').select('name').eq('id', user!.id).single()
-    await supabase.from('work_records').update({
+    const { error } = await supabase.from('work_records').update({
       deleted: true, deleted_by: user!.id,
       deleted_by_name: prof?.name || '未知',
       deleted_at: new Date().toISOString(),
     }).eq('id', id)
+    if (error) { alert('删除失败：' + error.message); return }
     loadRecords()
   }
 
@@ -184,11 +185,12 @@ export default function ProjectDetailPanel({
     if (!confirm('确认标记该工时记录为已删除？')) return
     const { data: { user } } = await supabase.auth.getUser()
     const { data: prof } = await supabase.from('profiles').select('name').eq('id', user!.id).single()
-    await supabase.from('time_logs').update({
+    const { error } = await supabase.from('time_logs').update({
       deleted: true, deleted_by: user!.id,
       deleted_by_name: prof?.name || '未知',
       deleted_at: new Date().toISOString(),
     }).eq('id', id)
+    if (error) { alert('删除失败：' + error.message); return }
     loadTimeLogs()
   }
 
@@ -296,8 +298,7 @@ export default function ProjectDetailPanel({
               <p className="text-center text-gray-400 text-sm py-8">暂无工作记录</p>
             )}
             {records.map((r: any) => {
-              const isOwner       = r.author_id === currentUserId
-              const canSoftDelete = !r.deleted && (isOwner || isAdmin)
+              const canSoftDelete = !r.deleted
               const canHardDelete = r.deleted && isAdmin
 
               return (
@@ -362,8 +363,7 @@ export default function ProjectDetailPanel({
             )}
 
             {timeLogs.map((l: any) => {
-              const isOwner       = l.member_id === currentUserId
-              const canSoftDelete = !l.deleted && (isOwner || isAdmin)
+              const canSoftDelete = !l.deleted
               const canHardDelete = l.deleted && isAdmin
               const dur = l.finished_at
                 ? ((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000).toFixed(1) + ' 小时'
