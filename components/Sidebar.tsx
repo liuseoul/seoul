@@ -114,7 +114,7 @@ export default function Sidebar({ profile }: SidebarProps) {
     const { data } = await supabase
       .from('reminders')
       .select('*, profiles(name)')
-      .order('start_date', { ascending: true })
+      .order('due_date', { ascending: true })
     setReminders(data || [])
   }
 

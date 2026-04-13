@@ -65,10 +65,23 @@ export default function TodoPanel({ profile }: { profile: any }) {
   }, [])
 
   async function loadTodos() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('todos')
       .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by, deleted, deleted_by, deleted_by_name, deleted_at')
       .order('created_at', { ascending: false })
+
+    if (error) {
+      // Migration 015 not yet applied — fall back to pre-soft-delete columns
+      const { data: fallback } = await supabase
+        .from('todos')
+        .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by')
+        .order('created_at', { ascending: false })
+      setTodos((fallback || []).map(t => ({
+        ...t,
+        deleted: false, deleted_by: null, deleted_by_name: null, deleted_at: null,
+      })))
+      return
+    }
     setTodos(data || [])
   }
 
