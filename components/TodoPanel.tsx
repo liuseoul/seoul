@@ -227,8 +227,10 @@ export default function TodoPanel({ profile }: { profile: any }) {
     const canRevise    = isPending && !todo.deleted && currentUserId === todo.created_by
     // Restore from soft-delete: deleter or admin
     const canRestore   = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
-    // Hard-delete: admin only
+    // Hard-delete soft-deleted items: admin only
     const canHardDel   = todo.deleted && isAdmin
+    // Hard-delete completed items: admin only
+    const canHardDelCompleted = done && !todo.deleted && isAdmin
     // Restore from completed: completer (by name) or admin
     const canUncomplete = done && !todo.deleted &&
       ((profile?.name && profile.name === todo.completed_by_name) || isAdmin)
@@ -330,7 +332,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
               </div>
 
               {/* Action buttons */}
-              {(canRevise || canDelete || canRestore || canHardDel || canUncomplete) && (
+              {(canRevise || canDelete || canRestore || canHardDel || canHardDelCompleted || canUncomplete) && (
                 <div className="flex gap-2 mt-0.5">
                   {canRevise && (
                     <button
@@ -354,6 +356,14 @@ export default function TodoPanel({ profile }: { profile: any }) {
                       className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
                     >
                       恢复
+                    </button>
+                  )}
+                  {canHardDelCompleted && (
+                    <button
+                      onClick={() => hardDeleteTodo(todo.id)}
+                      className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium"
+                    >
+                      永久删除
                     </button>
                   )}
                   {canRestore && (
