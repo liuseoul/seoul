@@ -308,6 +308,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
           ) : (
             /* ── Normal display mode ── */
             <>
+              {/* All inline — content · abbrev · date · action buttons; wraps automatically */}
               <div className="flex items-baseline gap-1 flex-wrap">
                 <span className={`text-sm leading-snug break-words
                   ${todo.deleted ? 'line-through text-gray-400'
@@ -329,61 +330,43 @@ export default function TodoPanel({ profile }: { profile: any }) {
                     : fmtDate(todo.created_at)
                   }
                 </span>
+                {canRevise && (
+                  <button onClick={() => startEdit(todo)}
+                    className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0">
+                    修改
+                  </button>
+                )}
+                {canDelete && (
+                  <button onClick={() => softDeleteTodo(todo.id)}
+                    className="text-[10px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                    删除
+                  </button>
+                )}
+                {canUncomplete && (
+                  <button onClick={() => restoreCompleted(todo)}
+                    className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
+                    恢复
+                  </button>
+                )}
+                {canHardDelCompleted && (
+                  <button onClick={() => hardDeleteTodo(todo.id)}
+                    className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
+                    永久删除
+                  </button>
+                )}
+                {canRestore && (
+                  <button onClick={() => restoreTodo(todo.id)}
+                    className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium flex-shrink-0">
+                    恢复
+                  </button>
+                )}
+                {canHardDel && (
+                  <button onClick={() => hardDeleteTodo(todo.id)}
+                    className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0">
+                    永久删除
+                  </button>
+                )}
               </div>
-
-              {/* Action buttons */}
-              {(canRevise || canDelete || canRestore || canHardDel || canHardDelCompleted || canUncomplete) && (
-                <div className="flex gap-2 mt-0.5">
-                  {canRevise && (
-                    <button
-                      onClick={() => startEdit(todo)}
-                      className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors"
-                    >
-                      修改
-                    </button>
-                  )}
-                  {canDelete && (
-                    <button
-                      onClick={() => softDeleteTodo(todo.id)}
-                      className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      删除
-                    </button>
-                  )}
-                  {canUncomplete && (
-                    <button
-                      onClick={() => restoreCompleted(todo)}
-                      className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
-                    >
-                      恢复
-                    </button>
-                  )}
-                  {canHardDelCompleted && (
-                    <button
-                      onClick={() => hardDeleteTodo(todo.id)}
-                      className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium"
-                    >
-                      永久删除
-                    </button>
-                  )}
-                  {canRestore && (
-                    <button
-                      onClick={() => restoreTodo(todo.id)}
-                      className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
-                    >
-                      恢复
-                    </button>
-                  )}
-                  {canHardDel && (
-                    <button
-                      onClick={() => hardDeleteTodo(todo.id)}
-                      className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium"
-                    >
-                      永久删除
-                    </button>
-                  )}
-                </div>
-              )}
             </>
           )}
         </div>
