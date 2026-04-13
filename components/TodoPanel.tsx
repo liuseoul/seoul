@@ -20,6 +20,11 @@ type Todo = {
   completed_by_name: string | null
   position: number
   created_at: string
+  created_by: string | null
+  deleted: boolean
+  deleted_by: string | null
+  deleted_by_name: string | null
+  deleted_at: string | null
 }
 
 function parseItems(raw: string): { content: string; abbrev: string }[] {
@@ -43,22 +48,27 @@ function fmtDate(iso: string) {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
 }
 
-// TodoPanel accepts no role prop — all members can complete any item
-export default function TodoPanel() {
+export default function TodoPanel({ profile }: { profile: any }) {
   const supabase = createClient()
   const [todos,            setTodos]            = useState<Todo[]>([])
   const [showAdd,          setShowAdd]          = useState(false)
   const [input,            setInput]            = useState('')
   const [saving,           setSaving]           = useState(false)
   const [showAllCompleted, setShowAllCompleted] = useState(false)
+  const [currentUserId,    setCurrentUserId]    = useState<string | null>(null)
 
-  useEffect(() => { loadTodos() }, [])
+  const isAdmin = profile?.role === 'admin'
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
+    loadTodos()
+  }, [])
 
   async function loadTodos() {
     const { data } = await supabase
       .from('todos')
-      .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at')
-      .order('position', { ascending: true })
+      .select('id, content, assignee_abbrev, completed, completed_at, completed_by_name, position, created_at, created_by, deleted, deleted_by, deleted_by_name, deleted_at')
+      .order('created_at', { ascending: false })
     setTodos(data || [])
   }
 
@@ -67,7 +77,9 @@ export default function TodoPanel() {
     if (items.length === 0) { alert('未检测到有效条目'); return }
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const maxPos = todos.length > 0 ? Math.max(...todos.map(t => t.position)) : -1
+    const maxPos = todos.filter(t => !t.deleted).length > 0
+      ? Math.max(...todos.filter(t => !t.deleted).map(t => t.position))
+      : -1
     const { error } = await supabase.from('todos').insert(
       items.map((item, i) => ({
         content:         item.content,
@@ -82,6 +94,7 @@ export default function TodoPanel() {
   }
 
   async function toggleDone(todo: Todo) {
+    if (todo.deleted) return
     if (!todo.completed) {
       const { data: { user } } = await supabase.auth.getUser()
       const { data: prof } = await supabase
@@ -101,13 +114,58 @@ export default function TodoPanel() {
     await loadTodos()
   }
 
-  const uncompleted = todos
-    .filter(t => !t.completed)
-    .sort((a, b) => a.position - b.position)
+  async function softDeleteTodo(id: string) {
+    if (!confirm('确认删除该待办事项？')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: prof } = await supabase
+      .from('profiles').select('name').eq('id', user!.id).single()
+    const { error } = await supabase.from('todos').update({
+      deleted:          true,
+      deleted_by:       user!.id,
+      deleted_by_name:  prof?.name || '未知',
+      deleted_at:       new Date().toISOString(),
+    }).eq('id', id)
+    if (error) { alert('删除失败：' + error.message); return }
+    await loadTodos()
+  }
 
+  async function restoreTodo(id: string) {
+    const { error } = await supabase.from('todos').update({
+      deleted:          false,
+      deleted_by:       null,
+      deleted_by_name:  null,
+      deleted_at:       null,
+    }).eq('id', id)
+    if (error) { alert('恢复失败：' + error.message); return }
+    await loadTodos()
+  }
+
+  async function hardDeleteTodo(id: string) {
+    if (!confirm('确认永久删除该待办？此操作不可恢复。')) return
+    const { error } = await supabase.from('todos').delete().eq('id', id)
+    if (error) { alert('删除失败：' + error.message); return }
+    await loadTodos()
+  }
+
+  // ── Partitions ─────────────────────────────────────────────
+  // pending: not completed, not deleted — sorted newest-first
+  const uncompleted = todos
+    .filter(t => !t.completed && !t.deleted)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  // completed: not deleted
   const completed = todos
-    .filter(t => t.completed)
+    .filter(t => t.completed && !t.deleted)
     .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+
+  // deleted (soft-deleted)
+  const deletedTodos = todos
+    .filter(t => t.deleted)
+    .sort((a, b) => {
+      const ta = a.deleted_at ?? a.created_at
+      const tb = b.deleted_at ?? b.created_at
+      return new Date(tb).getTime() - new Date(ta).getTime()
+    })
 
   const completedSlots   = Math.max(0, MAX_TOTAL - uncompleted.length)
   const visibleCompleted = showAllCompleted ? completed : completed.slice(0, completedSlots)
@@ -117,6 +175,11 @@ export default function TodoPanel() {
   function TodoRow({ todo, index, isPending }: { todo: Todo; index: number; isPending: boolean }) {
     const done  = todo.completed
     const rowBg = isPending ? PENDING_BG[index % 2] : ''
+
+    const canDelete  = isPending && !todo.deleted
+    const canRestore = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
+    const canHardDel = todo.deleted && isAdmin
+
     return (
       <div className={`flex items-center gap-2 px-2 py-2 rounded-lg border transition-colors
         ${isPending
@@ -125,41 +188,82 @@ export default function TodoPanel() {
         }`}
       >
         {/* Circle */}
-        <button
-          onClick={() => toggleDone(todo)}
-          title={done ? '取消完成' : '标记完成'}
-          className={`flex-shrink-0 w-3.5 h-3.5 rounded-full transition-colors
-            ${done
-              ? 'bg-teal-500 flex items-center justify-center hover:bg-gray-400'
-              : 'border-2 border-gray-400 hover:border-teal-500'
-            }`}
-        >
-          {done && (
-            <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24"
-              stroke="currentColor" strokeWidth={3.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </button>
+        {!todo.deleted && (
+          <button
+            onClick={() => toggleDone(todo)}
+            title={done ? '取消完成' : '标记完成'}
+            className={`flex-shrink-0 w-3.5 h-3.5 rounded-full transition-colors
+              ${done
+                ? 'bg-teal-500 flex items-center justify-center hover:bg-gray-400'
+                : 'border-2 border-gray-400 hover:border-teal-500'
+              }`}
+          >
+            {done && (
+              <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor" strokeWidth={3.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        )}
+        {todo.deleted && (
+          <span className="flex-shrink-0 w-3.5 h-3.5 text-[10px] text-red-300 flex items-center justify-center">✕</span>
+        )}
 
         {/* Content row */}
-        <div className="flex-1 min-w-0 flex items-baseline gap-1 flex-wrap">
-          <span className={`text-sm leading-snug break-words
-            ${done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-            {todo.content}
-          </span>
-          {todo.assignee_abbrev && (
-            <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
-              ${done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
-              {todo.assignee_abbrev}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-1 flex-wrap">
+            <span className={`text-sm leading-snug break-words
+              ${todo.deleted ? 'line-through text-gray-400'
+              : done ? 'text-gray-400 line-through'
+              : 'text-gray-800'}`}>
+              {todo.content}
             </span>
+            {todo.assignee_abbrev && (
+              <span className={`text-[10px] font-bold px-1 rounded flex-shrink-0
+                ${todo.deleted || done ? 'text-gray-400 bg-gray-100' : 'text-teal-600 bg-teal-50'}`}>
+                {todo.assignee_abbrev}
+              </span>
+            )}
+            <span className="text-[10px] text-gray-400 flex-shrink-0">
+              {todo.deleted && todo.deleted_by_name
+                ? `已删除 · ${todo.deleted_by_name}`
+                : done && todo.completed_by_name
+                ? `✓ ${todo.completed_by_name}`
+                : fmtDate(todo.created_at)
+              }
+            </span>
+          </div>
+
+          {/* Action buttons */}
+          {(canDelete || canRestore || canHardDel) && (
+            <div className="flex gap-2 mt-0.5">
+              {canDelete && (
+                <button
+                  onClick={() => softDeleteTodo(todo.id)}
+                  className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  删除
+                </button>
+              )}
+              {canRestore && (
+                <button
+                  onClick={() => restoreTodo(todo.id)}
+                  className="text-[10px] text-teal-500 hover:text-teal-700 transition-colors font-medium"
+                >
+                  恢复
+                </button>
+              )}
+              {canHardDel && (
+                <button
+                  onClick={() => hardDeleteTodo(todo.id)}
+                  className="text-[10px] text-red-500 hover:text-red-700 transition-colors font-medium"
+                >
+                  永久删除
+                </button>
+              )}
+            </div>
           )}
-          <span className="text-[10px] text-gray-400 flex-shrink-0">
-            {done && todo.completed_by_name
-              ? `✓ ${todo.completed_by_name}`
-              : fmtDate(todo.created_at)
-            }
-          </span>
         </div>
       </div>
     )
@@ -182,7 +286,7 @@ export default function TodoPanel() {
 
       {/* List */}
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-        {uncompleted.length === 0 && completed.length === 0 && (
+        {uncompleted.length === 0 && completed.length === 0 && deletedTodos.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-8">暂无待办事项</p>
         )}
 
@@ -223,6 +327,22 @@ export default function TodoPanel() {
           >
             收起
           </button>
+        )}
+
+        {/* ── Deleted section ── */}
+        {deletedTodos.length > 0 && (
+          <>
+            <div className="pt-3 pb-1 flex items-center gap-2">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
+                已删除 {deletedTodos.length}
+              </span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+            {deletedTodos.map((todo, idx) => (
+              <TodoRow key={todo.id} todo={todo} index={idx} isPending={false} />
+            ))}
+          </>
         )}
       </div>
 

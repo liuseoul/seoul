@@ -31,6 +31,37 @@ function formatDate(iso: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function formatShortDate(iso: string) {
+  const d = new Date(iso)
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Returns the most-recent non-deleted activity across work_records + time_logs */
+function getLatestActivity(project: any): { label: string; operator: string } | null {
+  const activities: { ts: number; label: string; operator: string }[] = []
+
+  for (const r of project.work_records || []) {
+    if (r.deleted) continue
+    activities.push({
+      ts:       new Date(r.created_at).getTime(),
+      label:    formatShortDate(r.created_at),
+      operator: r.profiles?.name || '',
+    })
+  }
+  for (const l of project.time_logs || []) {
+    if (l.deleted) continue
+    activities.push({
+      ts:       new Date(l.started_at).getTime(),
+      label:    formatShortDate(l.started_at),
+      operator: l.profiles?.name || '',
+    })
+  }
+
+  if (activities.length === 0) return null
+  activities.sort((a, b) => b.ts - a.ts)
+  return { label: activities[0].label, operator: activities[0].operator }
+}
+
 export default function ProjectList({ projects, profile }: { projects: any[]; profile: any }) {
   const [filter, setFilter]     = useState('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -101,11 +132,12 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           )}
 
           {filtered.map((project: any, index: number) => {
-            const isCancelled = project.status === 'delayed'
-            const recordCount = project.work_records?.[0]?.count ?? 0
-            const hours       = calcHours(project.time_logs || [])
-            const isSelected  = selectedId === project.id
-            const rowBg       = ROW_COLORS[index % 2]
+            const isCancelled  = project.status === 'delayed'
+            const recordCount  = (project.work_records || []).filter((r: any) => !r.deleted).length
+            const hours        = calcHours(project.time_logs || [])
+            const isSelected   = selectedId === project.id
+            const rowBg        = ROW_COLORS[index % 2]
+            const latestAct    = getLatestActivity(project)
 
             return (
               <div
@@ -141,14 +173,19 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                   </span>
                 </div>
 
-                {/* Right: status + date */}
+                {/* Right: status + latest activity */}
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className={`status-tag st-${project.status}`}>
                     {STATUS_LABELS[project.status] || project.status}
                   </span>
-                  <span className="text-xs text-gray-400 w-24 text-right">
-                    {formatDate(project.updated_at || project.created_at)}
-                  </span>
+                  {latestAct ? (
+                    <div className="text-right w-28">
+                      <div className="text-xs text-gray-500">{latestAct.label}</div>
+                      <div className="text-[10px] text-gray-400">{latestAct.operator}</div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-300 w-28 text-right">暂无记录</span>
+                  )}
                 </div>
               </div>
             )
@@ -164,7 +201,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         />
       )}
 
-      <TodoPanel />
+      <TodoPanel profile={profile} />
     </div>
   )
 }

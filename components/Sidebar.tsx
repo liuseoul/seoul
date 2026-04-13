@@ -25,6 +25,8 @@ const MAX_UPCOMING = 10   // cap before "show more"
 type Reminder = {
   id: string
   due_date: string
+  start_date: string | null
+  end_date: string | null
   content: string
   type: string
   start_time: string | null
@@ -41,13 +43,42 @@ interface SidebarProps {
   profile: { id: string; name: string; role: string } | null
 }
 
+// ── Helpers ───────────────────────────────────────────────────
+function fmtTime(t: string | null) { return t ? t.slice(0, 5) : '' }
+
+function remPrimaryDate(r: Reminder): string {
+  return r.start_date || r.due_date
+}
+function remEndDate(r: Reminder): string {
+  return r.end_date || r.start_date || r.due_date
+}
+
+/** Returns "mm/dd" or "mm/dd–mm/dd" */
+function remDateLabel(r: Reminder): string {
+  const sd = remPrimaryDate(r)
+  const ed = remEndDate(r)
+  const sd_label = sd.slice(5, 7) + '/' + sd.slice(8, 10)
+  if (sd === ed) return sd_label
+  return sd_label + '–' + ed.slice(5, 7) + '/' + ed.slice(8, 10)
+}
+
+/** Full date display for detail modal */
+function remFullDateLabel(r: Reminder, todayStr: string): string {
+  const sd = remPrimaryDate(r)
+  const ed = remEndDate(r)
+  const fmt = (s: string) => `${s.slice(0, 4)}/${s.slice(5, 7)}/${s.slice(8, 10)}`
+  if (sd === ed) {
+    return (sd === todayStr ? '今天 · ' : '') + fmt(sd)
+  }
+  return fmt(sd) + ' – ' + fmt(ed)
+}
+
 export default function Sidebar({ profile }: SidebarProps) {
   const router   = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
 
   const isAdmin = profile?.role === 'admin'
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   const now      = new Date()
   const todayStr = now.toISOString().split('T')[0]
@@ -55,65 +86,77 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
 
-  const [showAddRem,   setShowAddRem]   = useState(false)
-  const [remDate,      setRemDate]      = useState(todayStr)
-  const [remContent,   setRemContent]   = useState('')
-  const [remType,      setRemType]      = useState('others')
-  const [remStartTime, setRemStartTime] = useState('')
-  const [remEndTime,   setRemEndTime]   = useState('')
-  const [remSaving,    setRemSaving]    = useState(false)
+  // ── Add reminder form state ───────────────────────────────
+  const [showAddRem,    setShowAddRem]    = useState(false)
+  const [remStartDate,  setRemStartDate]  = useState(todayStr)
+  const [remEndDate_,   setRemEndDate_]   = useState(todayStr)
+  const [remContent,    setRemContent]    = useState('')
+  const [remType,       setRemType]       = useState('others')
+  const [remStartTime,  setRemStartTime]  = useState('')
+  const [remEndTime,    setRemEndTime]    = useState('')
+  const [remSaving,     setRemSaving]     = useState(false)
 
+  // ── Reminder detail modal ─────────────────────────────────
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null)
 
+  // ── Daily stats modal (admin only) ────────────────────────
+  const [showDailyStats,  setShowDailyStats]  = useState(false)
+  const [statsDate,       setStatsDate]       = useState(todayStr)
+  const [statsLoading,    setStatsLoading]    = useState(false)
+  const [statsRecords,    setStatsRecords]    = useState<any[]>([])
+  const [statsTodos,      setStatsTodos]      = useState<any[]>([])
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
     loadReminders()
   }, [])
 
   async function loadReminders() {
-    // Fetch ALL reminders — no date filter, no auto-delete
-    // Past items and deleted items are kept for history
     const { data } = await supabase
       .from('reminders')
       .select('*, profiles(name)')
-      .order('due_date', { ascending: true })
+      .order('start_date', { ascending: true })
     setReminders(data || [])
   }
 
-  // ── Partition reminders into three groups ─────────────────
-  // 1. Upcoming (not deleted, due_date >= today) — primary list
-  // 2. Past     (not deleted, due_date < today)  — faded, strikethrough
-  // 3. Deleted  (deleted = true)                 — strikethrough + operator
+  // ── Partition reminders ───────────────────────────────────
   const upcoming = reminders
-    .filter(r => !r.deleted && r.due_date >= todayStr)
-    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .filter(r => !r.deleted && remEndDate(r) >= todayStr)
+    .sort((a, b) => remPrimaryDate(a).localeCompare(remPrimaryDate(b)))
 
   const past = reminders
-    .filter(r => !r.deleted && r.due_date < todayStr)
-    .sort((a, b) => b.due_date.localeCompare(a.due_date))   // most recent past first
+    .filter(r => !r.deleted && remEndDate(r) < todayStr)
+    .sort((a, b) => remPrimaryDate(b).localeCompare(remPrimaryDate(a)))
 
   const deleted = reminders
     .filter(r => r.deleted)
     .sort((a, b) => {
-      const ta = a.deleted_at ?? a.due_date
-      const tb = b.deleted_at ?? b.due_date
+      const ta = a.deleted_at ?? remPrimaryDate(a)
+      const tb = b.deleted_at ?? remPrimaryDate(b)
       return tb.localeCompare(ta)
     })
 
   const visibleUpcoming = showAllUpcoming ? upcoming : upcoming.slice(0, MAX_UPCOMING)
   const hasMoreUpcoming = !showAllUpcoming && upcoming.length > MAX_UPCOMING
 
-  // ── Add reminder ──────────────────────────────────────────
+  // ── Save reminder ─────────────────────────────────────────
   async function saveReminder() {
-    if (!remDate || !remContent.trim()) { alert('请填写截止日期和内容'); return }
+    if (!remStartDate)          { alert('请填写开始日期'); return }
+    if (!remEndDate_)           { alert('请填写结束日期'); return }
+    if (!remContent.trim())     { alert('请填写内容'); return }
+    if (remEndDate_ < remStartDate) { alert('结束日期不能早于开始日期'); return }
     if (remEndTime && remStartTime && remEndTime <= remStartTime) {
       alert('结束时间必须晚于开始时间'); return
     }
     setRemSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('reminders').insert({
-      due_date: remDate, content: remContent.trim(), type: remType,
-      start_time: remStartTime || null, end_time: remEndTime || null,
+      due_date:   remStartDate,   // backwards compat
+      start_date: remStartDate,
+      end_date:   remEndDate_,
+      content:    remContent.trim(),
+      type:       remType,
+      start_time: remStartTime || null,
+      end_time:   remEndTime   || null,
       created_by: user!.id,
     })
     if (error) { alert('保存失败：' + error.message) }
@@ -122,11 +165,11 @@ export default function Sidebar({ profile }: SidebarProps) {
   }
 
   function resetAddForm() {
-    setRemContent(''); setRemDate(todayStr)
+    setRemContent(''); setRemStartDate(todayStr); setRemEndDate_(todayStr)
     setRemType('others'); setRemStartTime(''); setRemEndTime('')
   }
 
-  // ── Soft-delete reminder (records operator name) ──────────
+  // ── Soft-delete ───────────────────────────────────────────
   async function softDeleteReminder(id: string) {
     if (!confirm('确认删除该日程？删除后仍可在历史记录中查看。')) return
     const { data: { user } } = await supabase.auth.getUser()
@@ -142,6 +185,43 @@ export default function Sidebar({ profile }: SidebarProps) {
     await loadReminders()
   }
 
+  // ── Admin hard-delete ─────────────────────────────────────
+  async function hardDeleteReminder(id: string) {
+    if (!confirm('确认永久删除该日程？此操作不可恢复。')) return
+    const { error } = await supabase.from('reminders').delete().eq('id', id)
+    if (error) { alert('删除失败：' + error.message); return }
+    setSelectedReminder(null)
+    await loadReminders()
+  }
+
+  // ── Daily statistics ──────────────────────────────────────
+  async function loadDailyStats() {
+    setStatsLoading(true)
+    const dayStart = `${statsDate}T00:00:00.000Z`
+    const dayEnd   = `${statsDate}T23:59:59.999Z`
+
+    const [{ data: recs }, { data: tdos }] = await Promise.all([
+      supabase
+        .from('work_records')
+        .select('id, content, created_at, profiles!work_records_author_id_fkey(name), projects(name)')
+        .eq('deleted', false)
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('todos')
+        .select('id, content, assignee_abbrev, completed_at, completed_by_name')
+        .eq('completed', true)
+        .eq('deleted', false)
+        .gte('completed_at', dayStart)
+        .lte('completed_at', dayEnd)
+        .order('completed_at', { ascending: true }),
+    ])
+    setStatsRecords(recs || [])
+    setStatsTodos(tdos || [])
+    setStatsLoading(false)
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
@@ -153,17 +233,15 @@ export default function Sidebar({ profile }: SidebarProps) {
     ...(isAdmin ? [{ href: '/admin', label: '管理后台', icon: '⚙️' }] : []),
   ]
 
-  function fmtTime(t: string | null) { return t ? t.slice(0, 5) : '' }
-
   // ── Single reminder row ───────────────────────────────────
   function ReminderRow({ r, index, variant }: {
     r: Reminder
     index: number
     variant: 'upcoming' | 'past' | 'deleted'
   }) {
-    const isToday = r.due_date === todayStr
-    const mm = r.due_date.slice(5, 7)
-    const dd = r.due_date.slice(8, 10)
+    const primDate  = remPrimaryDate(r)
+    const isToday   = primDate === todayStr
+    const dateLabel = remDateLabel(r)
 
     const rowBg = variant === 'upcoming'
       ? (isToday ? '' : ROW_BG[index % 2])
@@ -184,11 +262,11 @@ export default function Sidebar({ profile }: SidebarProps) {
         className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-all ${containerCls}`}
       >
         {/* Date */}
-        <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-9
+        <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-auto min-w-9
           ${variant === 'upcoming' && isToday ? 'text-amber-600'
           : variant === 'upcoming' ? 'text-teal-600'
           : 'text-gray-400'}`}>
-          {mm}/{dd}
+          {dateLabel}
         </span>
 
         <div className="min-w-0 flex-1">
@@ -259,6 +337,17 @@ export default function Sidebar({ profile }: SidebarProps) {
               <span>{item.label}</span>
             </button>
           ))}
+          {/* Daily stats button — admin only */}
+          {isAdmin && (
+            <button
+              onClick={() => { setShowDailyStats(true); setStatsRecords([]); setStatsTodos([]) }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 text-left
+                         text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            >
+              <span className="text-base">📊</span>
+              <span>日统计</span>
+            </button>
+          )}
         </nav>
 
         {/* 日程安排 */}
@@ -301,7 +390,7 @@ export default function Sidebar({ profile }: SidebarProps) {
               </button>
             )}
 
-            {/* ── Past items (faded strikethrough) ── */}
+            {/* ── Past items ── */}
             {past.length > 0 && (
               <>
                 <div className="flex items-center gap-2 pt-2 pb-1">
@@ -315,7 +404,7 @@ export default function Sidebar({ profile }: SidebarProps) {
               </>
             )}
 
-            {/* ── Deleted items (soft-deleted with operator) ── */}
+            {/* ── Deleted items ── */}
             {deleted.length > 0 && (
               <>
                 <div className="flex items-center gap-2 pt-2 pb-1">
@@ -363,8 +452,11 @@ export default function Sidebar({ profile }: SidebarProps) {
                 className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
             <div className="space-y-4">
+              {/* Type — mandatory */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">类型</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  类型 <span className="text-red-500">*</span>
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(TYPE_LABELS).map(([val, label]) => (
                     <button key={val} type="button" onClick={() => setRemType(val)}
@@ -377,10 +469,38 @@ export default function Sidebar({ profile }: SidebarProps) {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">截止日期</label>
-                <input type="date" value={remDate} onChange={e => setRemDate(e.target.value)} className="input-field" />
+
+              {/* Date range — both mandatory */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    开始日期 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={remStartDate}
+                    onChange={e => {
+                      setRemStartDate(e.target.value)
+                      if (remEndDate_ < e.target.value) setRemEndDate_(e.target.value)
+                    }}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    结束日期 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={remEndDate_}
+                    min={remStartDate}
+                    onChange={e => setRemEndDate_(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
               </div>
+
+              {/* Time range — optional */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
@@ -391,8 +511,12 @@ export default function Sidebar({ profile }: SidebarProps) {
                   <input type="time" value={remEndTime} onChange={e => setRemEndTime(e.target.value)} className="input-field" />
                 </div>
               </div>
+
+              {/* Content — mandatory */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">内容</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  内容 <span className="text-red-500">*</span>
+                </label>
                 <textarea value={remContent} onChange={e => setRemContent(e.target.value)}
                   placeholder="日程内容…" rows={3} className="input-field resize-none" autoFocus />
               </div>
@@ -423,7 +547,7 @@ export default function Sidebar({ profile }: SidebarProps) {
             </div>
 
             <div className="space-y-3">
-              {/* Status badge for past/deleted */}
+              {/* Status badge */}
               {selectedReminder.deleted ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-100 rounded-lg">
                   <span className="text-xs text-red-500 font-semibold">已删除</span>
@@ -431,7 +555,7 @@ export default function Sidebar({ profile }: SidebarProps) {
                     <span className="text-xs text-red-400">· 操作人：{selectedReminder.deleted_by_name}</span>
                   )}
                 </div>
-              ) : selectedReminder.due_date < todayStr ? (
+              ) : remEndDate(selectedReminder) < todayStr ? (
                 <div className="px-3 py-1.5 bg-gray-100 rounded-lg">
                   <span className="text-xs text-gray-500 font-semibold">已过期</span>
                 </div>
@@ -445,20 +569,15 @@ export default function Sidebar({ profile }: SidebarProps) {
                 </span>
               )}
 
-              {/* Date */}
+              {/* Date range */}
               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold
-                ${selectedReminder.due_date === todayStr
+                ${remPrimaryDate(selectedReminder) === todayStr
                   ? 'bg-amber-100 text-amber-700'
-                  : selectedReminder.due_date < todayStr || selectedReminder.deleted
+                  : remEndDate(selectedReminder) < todayStr || selectedReminder.deleted
                     ? 'bg-gray-100 text-gray-500'
                     : 'bg-teal-50 text-teal-700'}`}>
                 <span>📅</span>
-                <span>
-                  {selectedReminder.due_date === todayStr ? '今天 · ' : ''}
-                  {selectedReminder.due_date.slice(0, 4)}/
-                  {selectedReminder.due_date.slice(5, 7)}/
-                  {selectedReminder.due_date.slice(8, 10)}
-                </span>
+                <span>{remFullDateLabel(selectedReminder, todayStr)}</span>
               </div>
 
               {/* Time range */}
@@ -474,7 +593,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
               {/* Content */}
               <p className={`text-sm leading-relaxed whitespace-pre-wrap
-                ${selectedReminder.deleted || selectedReminder.due_date < todayStr
+                ${selectedReminder.deleted || remEndDate(selectedReminder) < todayStr
                   ? 'text-gray-400 line-through'
                   : 'text-gray-800'}`}>
                 {selectedReminder.content}
@@ -490,7 +609,7 @@ export default function Sidebar({ profile }: SidebarProps) {
                 className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                 关闭
               </button>
-              {/* Delete button only for non-deleted items; any member can soft-delete */}
+              {/* Soft-delete: any member, non-deleted items */}
               {!selectedReminder.deleted && (
                 <button
                   onClick={() => softDeleteReminder(selectedReminder.id)}
@@ -498,6 +617,133 @@ export default function Sidebar({ profile }: SidebarProps) {
                 >
                   删除
                 </button>
+              )}
+              {/* Hard-delete: admin only, already soft-deleted */}
+              {selectedReminder.deleted && isAdmin && (
+                <button
+                  onClick={() => hardDeleteReminder(selectedReminder.id)}
+                  className="flex-1 py-2 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+                >
+                  永久删除
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Daily Statistics Modal (admin only) ════════════════ */}
+      {showDailyStats && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">日统计</h3>
+              <button onClick={() => setShowDailyStats(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            {/* Date picker */}
+            <div className="px-6 py-4 border-b border-gray-100 flex-shrink-0 flex items-center gap-3">
+              <input
+                type="date"
+                value={statsDate}
+                onChange={e => setStatsDate(e.target.value)}
+                className="input-field w-44"
+              />
+              <button
+                onClick={loadDailyStats}
+                disabled={statsLoading}
+                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+              >
+                {statsLoading ? '查询中…' : '确认'}
+              </button>
+              {(statsRecords.length > 0 || statsTodos.length > 0) && !statsLoading && (
+                <span className="text-xs text-gray-400">
+                  共 {statsRecords.length + statsTodos.length} 条
+                </span>
+              )}
+            </div>
+
+            {/* Results */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+              {statsLoading && (
+                <p className="text-sm text-gray-400 text-center py-8">查询中…</p>
+              )}
+
+              {!statsLoading && statsRecords.length === 0 && statsTodos.length === 0 && (statsRecords !== null) && (
+                <p className="text-sm text-gray-400 text-center py-8">该日暂无记录</p>
+              )}
+
+              {/* Work records section */}
+              {!statsLoading && statsRecords.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                    工作记录 <span className="text-gray-400 font-normal">({statsRecords.length})</span>
+                  </h4>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500">
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-24">项目</th>
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium">内容</th>
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-14">操作人</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statsRecords.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-gray-50">
+                          <td className="px-2 py-1.5 border border-gray-200 text-gray-600">
+                            {r.projects?.name || '—'}
+                          </td>
+                          <td className="px-2 py-1.5 border border-gray-200 text-gray-800 whitespace-pre-wrap leading-relaxed">
+                            {r.content}
+                          </td>
+                          <td className="px-2 py-1.5 border border-gray-200 text-gray-500">
+                            {r.profiles?.name || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Completed todos section */}
+              {!statsLoading && statsTodos.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                    已完成待办 <span className="text-gray-400 font-normal">({statsTodos.length})</span>
+                  </h4>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500">
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium">内容</th>
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-10">负责</th>
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-16">完成时间</th>
+                        <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-14">操作人</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statsTodos.map((t: any) => (
+                        <tr key={t.id} className="hover:bg-gray-50">
+                          <td className="px-2 py-1.5 border border-gray-200 text-gray-800">{t.content}</td>
+                          <td className="px-2 py-1.5 border border-gray-200 text-center text-teal-600 font-bold">
+                            {t.assignee_abbrev || '—'}
+                          </td>
+                          <td className="px-2 py-1.5 border border-gray-200 text-gray-500">
+                            {t.completed_at
+                              ? new Date(t.completed_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                              : '—'}
+                          </td>
+                          <td className="px-2 py-1.5 border border-gray-200 text-gray-500">
+                            {t.completed_by_name || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

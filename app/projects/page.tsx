@@ -22,8 +22,8 @@ export default async function ProjectsPage() {
     .select(`
       id, name, client, description, status, created_at, updated_at,
       agreement_party, service_fee_currency, service_fee_amount, collaboration_parties,
-      work_records(count),
-      time_logs(started_at, finished_at, deleted)
+      work_records(id, created_at, deleted, profiles!work_records_author_id_fkey(name)),
+      time_logs(id, started_at, finished_at, deleted, profiles!time_logs_member_id_fkey(name))
     `)
     .order('created_at', { ascending: false })
 

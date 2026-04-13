@@ -54,6 +54,7 @@ export default function ProjectDetailPanel({
   const [timeLogs, setTimeLogs]       = useState<any[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [statusChanging, setStatusChanging] = useState(false)
+  const [showTimeStats,  setShowTimeStats]  = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -338,14 +339,21 @@ export default function ProjectDetailPanel({
         {/* ── Time Logs Tab ── */}
         {tab === 'time' && (
           <>
-            <div className="mb-3">
+            <div className="mb-3 flex gap-2">
               <button
                 onClick={() => setShowAddTime(true)}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg
                            border border-teal-300 text-teal-600 text-sm font-medium
                            hover:bg-teal-50 transition-colors"
               >
                 + 添加
+              </button>
+              <button
+                onClick={() => setShowTimeStats(true)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm font-medium
+                           hover:bg-gray-50 transition-colors"
+              >
+                统计
               </button>
             </div>
 
@@ -450,6 +458,85 @@ export default function ProjectDetailPanel({
               >
                 {savingRecord ? '保存中…' : '保存'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Time Log Statistics Modal ── */}
+      {showTimeStats && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">工时统计</h3>
+                <p className="text-xs text-gray-400 mt-0.5 truncate">{project.name}</p>
+              </div>
+              <button onClick={() => setShowTimeStats(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            {/* Summary bar */}
+            {(() => {
+              const nonDeleted = timeLogs.filter((l: any) => !l.deleted)
+              const totalHrs = nonDeleted.reduce((sum: number, l: any) => {
+                if (!l.finished_at) return sum
+                return sum + (new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000
+              }, 0)
+              return (
+                <div className="px-6 py-2.5 bg-teal-50 border-b border-teal-100 flex-shrink-0 flex items-center gap-4 text-sm">
+                  <span className="text-teal-700">共 <strong>{nonDeleted.length}</strong> 条有效记录</span>
+                  <span className="text-teal-700">合计 <strong>{totalHrs.toFixed(1)}</strong> 小时</span>
+                </div>
+              )
+            })()}
+
+            <div className="flex-1 overflow-y-auto">
+              {timeLogs.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-12">暂无工时记录</p>
+              ) : (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr className="text-gray-500">
+                      <th className="text-left px-3 py-2 border-b border-gray-200 font-medium w-20">日期</th>
+                      <th className="text-left px-3 py-2 border-b border-gray-200 font-medium w-16">开始</th>
+                      <th className="text-left px-3 py-2 border-b border-gray-200 font-medium w-16">结束</th>
+                      <th className="text-left px-3 py-2 border-b border-gray-200 font-medium w-16">时长</th>
+                      <th className="text-left px-3 py-2 border-b border-gray-200 font-medium">内容</th>
+                      <th className="text-left px-3 py-2 border-b border-gray-200 font-medium w-14">操作人</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...timeLogs]
+                      .sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+                      .map((l: any) => {
+                        const dur = l.finished_at
+                          ? ((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 3600000).toFixed(1) + 'h'
+                          : '—'
+                        const dateStr = new Date(l.started_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+                        const startStr = new Date(l.started_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                        const endStr = l.finished_at
+                          ? new Date(l.finished_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                          : '—'
+                        return (
+                          <tr key={l.id} className={`hover:bg-gray-50 ${l.deleted ? 'opacity-40' : ''}`}>
+                            <td className="px-3 py-2 border-b border-gray-100 text-gray-600">{dateStr}</td>
+                            <td className="px-3 py-2 border-b border-gray-100 text-gray-600">{startStr}</td>
+                            <td className="px-3 py-2 border-b border-gray-100 text-gray-600">{endStr}</td>
+                            <td className="px-3 py-2 border-b border-gray-100 text-teal-600 font-semibold">{dur}</td>
+                            <td className="px-3 py-2 border-b border-gray-100 text-gray-800 whitespace-pre-wrap">
+                              {l.description || '—'}
+                              {l.deleted && <span className="ml-1 text-red-400">[已删除]</span>}
+                            </td>
+                            <td className="px-3 py-2 border-b border-gray-100 text-gray-500">
+                              {l.profiles?.name || '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
