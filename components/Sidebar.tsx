@@ -67,10 +67,10 @@ function remFullDateLabel(r: Reminder, today: string) {
 }
 
 // ── Stats table ───────────────────────────────────────────────
-function StatsTable({ loading, queried, records, timeLogs, todos, showOperator }: {
+function StatsTable({ loading, queried, records, timeLogs, todos, showOperator, groupByProject }: {
   loading: boolean; queried: boolean
   records: any[]; timeLogs: any[]; todos: any[]
-  showOperator: boolean
+  showOperator: boolean; groupByProject?: boolean
 }) {
   if (loading) return <p className="text-sm text-gray-400 text-center py-8">查询中…</p>
   if (!queried) return <p className="text-sm text-gray-400 text-center py-8">请选择日期后点击确认</p>
@@ -81,6 +81,106 @@ function StatsTable({ loading, queried, records, timeLogs, todos, showOperator }
     if (!finished) return '—'
     const m = Math.round((new Date(finished).getTime() - new Date(started).getTime()) / 60000)
     return m > 0 ? `${m} 分钟` : '—'
+  }
+
+  // ── Grouped-by-project rendering (for group stats) ──────
+  if (groupByProject && (records.length > 0 || timeLogs.length > 0)) {
+    type PGroup = { id: string; name: string; createdAt: string; records: any[]; timeLogs: any[] }
+    const projectMap = new Map<string, PGroup>()
+
+    for (const r of records) {
+      const pid = r.projects?.id || '__none__'
+      if (!projectMap.has(pid)) {
+        projectMap.set(pid, { id: pid, name: r.projects?.name || '—', createdAt: r.projects?.created_at || '0', records: [], timeLogs: [] })
+      }
+      projectMap.get(pid)!.records.push(r)
+    }
+    for (const l of timeLogs) {
+      const pid = l.projects?.id || '__none__'
+      if (!projectMap.has(pid)) {
+        projectMap.set(pid, { id: pid, name: l.projects?.name || '—', createdAt: l.projects?.created_at || '0', records: [], timeLogs: [] })
+      }
+      projectMap.get(pid)!.timeLogs.push(l)
+    }
+
+    const groups = Array.from(projectMap.values()).sort((a, b) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
+
+    return (
+      <div className="space-y-4">
+        {groups.map(group => (
+          <div key={group.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-teal-50 px-3 py-1.5 flex items-center">
+              <span className="text-xs font-semibold text-teal-700">{group.name}</span>
+              <span className="ml-2 text-[10px] text-teal-500">
+                {group.records.length > 0 && `工作 ${group.records.length}`}
+                {group.records.length > 0 && group.timeLogs.length > 0 && ' · '}
+                {group.timeLogs.length > 0 && `工时 ${group.timeLogs.length}`}
+              </span>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {group.records.map((r: any) => (
+                <div key={`r-${r.id}`} className="px-3 py-2 text-xs bg-white">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-gray-400 text-[10px]">工作记录</span>
+                    <span className="text-gray-400">{new Date(r.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                    {showOperator && <span className="text-indigo-500 font-medium">{r.profiles?.name || '—'}</span>}
+                  </div>
+                  <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{r.content}</p>
+                </div>
+              ))}
+              {group.timeLogs.map((l: any) => {
+                const startStr = new Date(l.started_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                const endStr   = l.finished_at ? new Date(l.finished_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'
+                return (
+                  <div key={`t-${l.id}`} className="px-3 py-2 text-xs bg-white">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-gray-400 text-[10px]">工时记录</span>
+                      <span className="text-gray-400">{startStr}–{endStr}</span>
+                      <span className="text-teal-600 font-semibold">{durMins(l.started_at, l.finished_at)}</span>
+                      {showOperator && <span className="text-indigo-500 font-medium">{l.profiles?.name || '—'}</span>}
+                    </div>
+                    {l.description && <p className="text-gray-800">{l.description}</p>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* Todos */}
+        {todos.length > 0 && (
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">
+              已完成待办 <span className="text-gray-400 font-normal">({todos.length})</span>
+            </h4>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-500">
+                  <th className="text-left px-2 py-1.5 border border-gray-200 font-medium">内容</th>
+                  <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-10">负责</th>
+                  <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-16">完成时间</th>
+                  {showOperator && <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-14">操作人</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {todos.map((t: any) => (
+                  <tr key={t.id} className="hover:bg-gray-50">
+                    <td className="px-2 py-1.5 border border-gray-200 text-gray-800">{t.content}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 text-center text-teal-600 font-bold">{t.assignee_abbrev || '—'}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 text-gray-500">
+                      {t.completed_at ? new Date(t.completed_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
+                    {showOperator && <td className="px-2 py-1.5 border border-gray-200 text-gray-500">{t.completed_by_name || '—'}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -192,7 +292,8 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [currentUserId,   setCurrentUserId]   = useState<string | null>(null)
   const [reminders,       setReminders]       = useState<Reminder[]>([])
   const [members,         setMembers]         = useState<Member[]>([])
-  const [showAllUpcoming, setShowAllUpcoming] = useState(false)
+  const [showAllUpcoming,  setShowAllUpcoming]  = useState(false)
+  const [showCalendarAll,  setShowCalendarAll]  = useState(false)
 
   // ── Add form state ────────────────────────────────────────
   const [showAddRem,   setShowAddRem]   = useState(false)
@@ -378,11 +479,11 @@ export default function Sidebar({ profile }: SidebarProps) {
     const s = `${groupDate}T00:00:00.000Z`, e = `${groupDate}T23:59:59.999Z`
     const [{ data: recs }, { data: logs }, { data: tdos }] = await Promise.all([
       supabase.from('work_records')
-        .select('id, content, created_at, profiles!work_records_author_id_fkey(name), projects(name)')
+        .select('id, content, created_at, profiles!work_records_author_id_fkey(name), projects(id, name, created_at)')
         .eq('deleted', false)
         .gte('created_at', s).lte('created_at', e).order('created_at', { ascending: true }),
       supabase.from('time_logs')
-        .select('id, started_at, finished_at, description, profiles!time_logs_member_id_fkey(name), projects(name)')
+        .select('id, started_at, finished_at, description, profiles!time_logs_member_id_fkey(name), projects(id, name, created_at)')
         .eq('deleted', false)
         .gte('started_at', s).lte('started_at', e).order('started_at', { ascending: true }),
       supabase.from('todos')
@@ -566,10 +667,16 @@ export default function Sidebar({ profile }: SidebarProps) {
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">日程安排</span>
-            <button onClick={() => setShowAddRem(true)}
-              className="text-xs text-gray-500 hover:text-teal-600 px-2 py-0.5 rounded border border-gray-300 hover:border-teal-400 transition-colors">
-              + 添加
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setShowCalendarAll(true)}
+                className="text-xs text-gray-500 hover:text-teal-600 px-2 py-0.5 rounded border border-gray-300 hover:border-teal-400 transition-colors">
+                全部
+              </button>
+              <button onClick={() => setShowAddRem(true)}
+                className="text-xs text-gray-500 hover:text-teal-600 px-2 py-0.5 rounded border border-gray-300 hover:border-teal-400 transition-colors">
+                + 添加
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
@@ -828,7 +935,61 @@ export default function Sidebar({ profile }: SidebarProps) {
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4">
               <StatsTable loading={groupLoading} queried={groupQueried}
-                records={groupRecords} timeLogs={groupTimeLogs} todos={groupTodos} showOperator={true} />
+                records={groupRecords} timeLogs={groupTimeLogs} todos={groupTodos} showOperator={true} groupByProject={true} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Calendar Show All Modal ═══════════════════════════ */}
+      {showCalendarAll && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">全部待处理日程 ({upcoming.length})</h3>
+              <button onClick={() => setShowCalendarAll(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+              {upcoming.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">暂无待处理日程</p>
+              ) : (
+                upcoming.map((r, i) => {
+                  const isToday = remPrimaryDate(r) === todayStr
+                  return (
+                    <button key={r.id} onClick={() => { setShowCalendarAll(false); openDetailRem(r) }}
+                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-all cursor-pointer
+                        ${isToday
+                          ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+                          : `${ROW_BG[i % 2]} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`}`}>
+                      <span className={`text-xs font-bold mt-0.5 flex-shrink-0 min-w-9
+                        ${isToday ? 'text-amber-600' : 'text-teal-600'}`}>
+                        {remDateLabel(r)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className={`text-sm leading-snug line-clamp-2 block
+                          ${isToday ? 'text-amber-800 font-medium' : 'text-gray-800'}`}>
+                          {r.content}
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {r.type && r.type !== 'others' && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TYPE_COLORS[r.type] || TYPE_COLORS.others}`}>
+                              {TYPE_LABELS[r.type] || r.type}
+                            </span>
+                          )}
+                          {r.assigned_to_name && (
+                            <span className="text-[10px] text-indigo-500 font-medium">@{r.assigned_to_name}</span>
+                          )}
+                          {r.start_time && (
+                            <span className="text-[10px] text-gray-400">
+                              {fmtTime(r.start_time)}{r.end_time ? `–${fmtTime(r.end_time)}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })
+              )}
             </div>
           </div>
         </div>

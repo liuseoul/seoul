@@ -243,6 +243,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
   const [editAssignee1,    setEditAssignee1]    = useState('')  // member name
   const [editAssignee2,    setEditAssignee2]    = useState('')  // member name
   const [editSaving,       setEditSaving]       = useState(false)
+  const [showAllPending,   setShowAllPending]   = useState(false)
 
   const isAdmin = profile?.role === 'admin'
 
@@ -400,10 +401,16 @@ export default function TodoPanel({ profile }: { profile: any }) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
         <h2 className="text-sm font-semibold text-gray-800">工作安排</h2>
-        <button onClick={() => setShowAdd(true)}
-          className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
-          + 添加
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowAllPending(true)}
+            className="text-xs text-gray-500 hover:text-teal-600 px-2 py-1 rounded border border-gray-300 hover:border-teal-400 transition-colors">
+            全部
+          </button>
+          <button onClick={() => setShowAdd(true)}
+            className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
+            + 添加
+          </button>
+        </div>
       </div>
 
       {/* List */}
@@ -456,6 +463,36 @@ export default function TodoPanel({ profile }: { profile: any }) {
           </>
         )}
       </div>
+
+      {/* Show All Pending Modal */}
+      {showAllPending && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">全部待处理事项 ({uncompleted.length})</h3>
+              <button onClick={() => setShowAllPending(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+              {uncompleted.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">暂无待处理事项</p>
+              ) : (
+                uncompleted.map((todo, idx) => (
+                  <div key={todo.id} className={`flex items-baseline gap-1.5 px-2 py-2 rounded-lg border border-gray-200 ${PENDING_BG[idx % 2]}`}>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">{fmtDate(todo.created_at)}</span>
+                    <span className="text-sm text-gray-800 leading-snug flex-1">{todo.content}</span>
+                    {todo.assignee_abbrev && (
+                      <span className="text-[10px] font-bold px-1 rounded text-teal-600 bg-teal-50 flex-shrink-0">{todo.assignee_abbrev}</span>
+                    )}
+                    {todo.assignee_abbrev_2 && (
+                      <span className="text-[10px] font-bold px-1 rounded text-indigo-600 bg-indigo-50 flex-shrink-0">{todo.assignee_abbrev_2}</span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showAdd && (

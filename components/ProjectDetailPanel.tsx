@@ -9,6 +9,24 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: '未启动',
 }
 
+type EditForm = {
+  name: string; client: string; description: string
+  agreement_party: string; service_fee_currency: string
+  service_fee_amount: string; collaboration_parties: string; status: string
+}
+
+const EMPTY_FORM: EditForm = {
+  name: '', client: '', description: '', agreement_party: '',
+  service_fee_currency: '', service_fee_amount: '', collaboration_parties: '', status: 'active',
+}
+
+const STATUS_EDIT = [
+  { value: 'active',    label: '进行中' },
+  { value: 'completed', label: '已完成' },
+  { value: 'cancelled', label: '未启动' },
+  { value: 'delayed',   label: '已取消' },
+]
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('zh-CN', {
     month: '2-digit', day: '2-digit',
@@ -58,6 +76,11 @@ export default function ProjectDetailPanel({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [statusChanging, setStatusChanging] = useState(false)
   const [showTimeStats,  setShowTimeStats]  = useState(false)
+
+  // ── Edit project modal ────────────────────────────────────
+  const [showEdit,   setShowEdit]   = useState(false)
+  const [editForm,   setEditForm]   = useState<EditForm>(EMPTY_FORM)
+  const [editSaving, setEditSaving] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -204,6 +227,45 @@ export default function ProjectDetailPanel({
     else loadTimeLogs()
   }
 
+  function openProjectEdit() {
+    setEditForm({
+      name:                  project.name || '',
+      client:                project.client || '',
+      description:           project.description || '',
+      agreement_party:       project.agreement_party || '',
+      service_fee_currency:  project.service_fee_currency || '',
+      service_fee_amount:    project.service_fee_amount != null ? String(project.service_fee_amount) : '',
+      collaboration_parties: (project.collaboration_parties as string[] | null)?.join('，') || '',
+      status:                project.status || 'active',
+    })
+    setShowEdit(true)
+  }
+
+  function setEditField(key: keyof EditForm, val: string) {
+    setEditForm(prev => ({ ...prev, [key]: val }))
+  }
+
+  async function saveProjectEdit() {
+    if (!editForm.name.trim()) { alert('项目名称不能为空'); return }
+    setEditSaving(true)
+    const { error } = await supabase.from('projects').update({
+      name:                  editForm.name.trim(),
+      client:                editForm.client.trim() || null,
+      description:           editForm.description.trim() || null,
+      agreement_party:       editForm.agreement_party.trim() || null,
+      service_fee_currency:  editForm.service_fee_currency.trim() || null,
+      service_fee_amount:    editForm.service_fee_amount ? parseFloat(editForm.service_fee_amount) : null,
+      collaboration_parties: editForm.collaboration_parties
+        ? editForm.collaboration_parties.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean)
+        : [],
+      status:                editForm.status,
+    }).eq('id', project.id)
+    setEditSaving(false)
+    if (error) { alert('保存失败：' + error.message); return }
+    setShowEdit(false)
+    window.location.reload()
+  }
+
   async function changeStatus(newStatus: string) {
     setStatusChanging(true)
     await supabase.from('projects').update({ status: newStatus }).eq('id', project.id)
@@ -262,6 +324,13 @@ export default function ProjectDetailPanel({
             <option value="completed">已完成</option>
             <option value="cancelled">未启动</option>
           </select>
+        )}
+        {isAdmin && (
+          <button onClick={openProjectEdit}
+            className="text-xs text-teal-600 hover:text-teal-800 border border-teal-400 hover:border-teal-600
+                       rounded px-2 py-1 transition-colors font-medium ml-auto">
+            修改
+          </button>
         )}
       </div>
 
@@ -536,6 +605,82 @@ export default function ProjectDetailPanel({
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Project Modal ── */}
+      {showEdit && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">修改项目信息</h3>
+              <button onClick={() => setShowEdit(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">项目名称 <span className="text-red-500">*</span></label>
+                <input type="text" value={editForm.name} onChange={e => setEditField('name', e.target.value)}
+                  className="input-field" autoFocus />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">委托方</label>
+                <input type="text" value={editForm.client} onChange={e => setEditField('client', e.target.value)} className="input-field" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">协议方</label>
+                <input type="text" value={editForm.agreement_party} onChange={e => setEditField('agreement_party', e.target.value)} className="input-field" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">服务费币种</label>
+                  <input type="text" value={editForm.service_fee_currency}
+                    onChange={e => setEditField('service_fee_currency', e.target.value)}
+                    placeholder="CNY / USD / KRW…" className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">服务费金额</label>
+                  <input type="number" value={editForm.service_fee_amount}
+                    onChange={e => setEditField('service_fee_amount', e.target.value)} className="input-field" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">协作方</label>
+                <input type="text" value={editForm.collaboration_parties}
+                  onChange={e => setEditField('collaboration_parties', e.target.value)}
+                  placeholder="多个协作方用逗号分隔" className="input-field" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STATUS_EDIT.map(s => (
+                    <button key={s.value} type="button" onClick={() => setEditField('status', s.value)}
+                      className={`py-1.5 px-3 text-sm rounded-lg border transition-colors text-left
+                        ${editForm.status === s.value
+                          ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                <textarea value={editForm.description} onChange={e => setEditField('description', e.target.value)}
+                  rows={3} className="input-field resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button onClick={() => setShowEdit(false)}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                取消
+              </button>
+              <button onClick={saveProjectEdit} disabled={editSaving}
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
+                {editSaving ? '保存中…' : '保存'}
+              </button>
             </div>
           </div>
         </div>

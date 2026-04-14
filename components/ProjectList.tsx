@@ -68,6 +68,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const supabase   = createClient()
   const router     = useRouter()
   const isAdmin    = profile?.role === 'admin'
+  const todayStr   = new Date().toISOString().split('T')[0]
 
   const [filter,     setFilter]     = useState('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -76,6 +77,12 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const [editProject, setEditProject] = useState<any | null>(null)
   const [form,        setForm]        = useState<EditForm>(EMPTY_FORM)
   const [saving,      setSaving]      = useState(false)
+
+  // ── Project statistics ─────────────────────────────────────
+  const [showStats,      setShowStats]      = useState(false)
+  const [statsStartDate, setStatsStartDate] = useState(todayStr.slice(0, 7) + '-01')  // first of current month
+  const [statsEndDate,   setStatsEndDate]   = useState(todayStr)
+  const [statsResult,    setStatsResult]    = useState<{ total: number; assigned: number; finished: number } | null>(null)
 
   function openEdit(e: React.MouseEvent, project: any) {
     e.stopPropagation()   // don't select the row
@@ -93,6 +100,20 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   }
 
   function closeEdit() { setEditProject(null); setForm(EMPTY_FORM) }
+
+  function computeStats() {
+    if (statsEndDate < statsStartDate) { alert('结束日期不能早于开始日期'); return }
+    const range = projects.filter(p => {
+      const ca = (p.created_at as string).split('T')[0]
+      return ca >= statsStartDate && ca <= statsEndDate
+    })
+    const total      = range.length
+    const unstarted  = range.filter(p => p.status === 'cancelled').length  // 未启动
+    const cancelled  = range.filter(p => p.status === 'delayed').length    // 已取消
+    const assigned   = total - unstarted - cancelled
+    const finished   = range.filter(p => p.status === 'completed').length
+    setStatsResult({ total, assigned, finished })
+  }
 
   function setField(key: keyof EditForm, val: string) {
     setForm(prev => ({ ...prev, [key]: val }))
@@ -193,6 +214,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
               )}
             </button>
           ))}
+          <button onClick={() => { setShowStats(true); setStatsResult(null) }}
+            className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
+                       bg-amber-500 hover:bg-amber-600 text-white shadow-sm">
+            项目统计
+          </button>
           <span className="ml-auto text-xs text-gray-400">共 {filtered.length} 个项目</span>
         </div>
 
@@ -416,6 +442,57 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
               >
                 {saving ? '保存中…' : '保存'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Project Statistics Modal ════════════════════════════ */}
+      {showStats && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-gray-900">项目统计</h3>
+              <button onClick={() => setShowStats(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">开始日期</label>
+                  <input type="date" value={statsStartDate}
+                    onChange={e => { setStatsStartDate(e.target.value); setStatsResult(null) }}
+                    className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">结束日期</label>
+                  <input type="date" value={statsEndDate} min={statsStartDate}
+                    onChange={e => { setStatsEndDate(e.target.value); setStatsResult(null) }}
+                    className="input-field" />
+                </div>
+              </div>
+              <button onClick={computeStats}
+                className="w-full py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors">
+                统计
+              </button>
+              {statsResult && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">新增项目数</span>
+                    <span className="text-2xl font-bold text-gray-900">{statsResult.total}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-teal-50">
+                    <div>
+                      <span className="text-sm text-gray-700">已签协议项目数</span>
+                      <p className="text-[10px] text-gray-400 mt-0.5">新增 − 未启动 − 已取消</p>
+                    </div>
+                    <span className="text-2xl font-bold text-teal-600">{statsResult.assigned}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-gray-600">已完成项目数</span>
+                    <span className="text-2xl font-bold text-indigo-600">{statsResult.finished}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
