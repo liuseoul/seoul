@@ -84,6 +84,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const [statsEndDate,   setStatsEndDate]   = useState(todayStr)
   const [statsResult,    setStatsResult]    = useState<{ total: number; assigned: number; finished: number } | null>(null)
 
+  // ── Project sort ───────────────────────────────────────────
+  const [showSortPicker, setShowSortPicker] = useState(false)
+  const [sortMode,       setSortMode]       = useState<'activity' | 'created'>('activity')
+  const [pendingSort,    setPendingSort]    = useState<'activity' | 'created'>('activity')
+
   function openEdit(e: React.MouseEvent, project: any) {
     e.stopPropagation()   // don't select the row
     setEditProject(project)
@@ -159,13 +164,20 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   }
 
   const sorted = (list: any[]) => {
-    const active   = list.filter((p: any) => p.status !== 'delayed')
-    const delayed  = list.filter((p: any) => p.status === 'delayed')
-    active.sort((a: any, b: any) => {
-      const ta = getMaxActivityTs(a), tb = getMaxActivityTs(b)
-      if (ta !== tb) return tb - ta   // most recent activity first
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+    const active  = list.filter((p: any) => p.status !== 'delayed')
+    const delayed = list.filter((p: any) => p.status === 'delayed')
+    if (sortMode === 'activity') {
+      active.sort((a: any, b: any) => {
+        const ta = getMaxActivityTs(a), tb = getMaxActivityTs(b)
+        if (ta !== tb) return tb - ta
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
+    } else {
+      // sort by created_at DESC
+      active.sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    }
     return [...active, ...delayed]
   }
 
@@ -218,6 +230,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
             className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
                        bg-amber-500 hover:bg-amber-600 text-white shadow-sm">
             项目统计
+          </button>
+          <button onClick={() => { setPendingSort(sortMode); setShowSortPicker(true) }}
+            className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
+                       bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm">
+            项目排序
           </button>
           <span className="ml-auto text-xs text-gray-400">共 {filtered.length} 个项目</span>
         </div>
@@ -443,6 +460,41 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                 {saving ? '保存中…' : '保存'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Project Sort Picker Modal ═══════════════════════════ */}
+      {showSortPicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-gray-900">项目排序</h3>
+              <button onClick={() => setShowSortPicker(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="space-y-2 mb-6">
+              {([
+                { value: 'activity', label: '按最近操作时间', desc: '有工作/工时记录的项目优先' },
+                { value: 'created',  label: '按项目建立日期', desc: '最新创建的项目排在前面' },
+              ] as const).map(opt => (
+                <button key={opt.value} type="button"
+                  onClick={() => setPendingSort(opt.value)}
+                  className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-colors
+                    ${pendingSort === opt.value
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
+                  <div className={`text-sm font-medium ${pendingSort === opt.value ? 'text-indigo-700' : 'text-gray-800'}`}>
+                    {opt.label}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setSortMode(pendingSort); setShowSortPicker(false) }}
+              className="w-full py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors">
+              确认
+            </button>
           </div>
         </div>
       )}

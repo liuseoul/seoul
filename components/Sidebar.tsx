@@ -149,36 +149,77 @@ function StatsTable({ loading, queried, records, timeLogs, todos, showOperator, 
           </div>
         ))}
 
-        {/* Todos */}
-        {todos.length > 0 && (
-          <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">
-              已完成待办 <span className="text-gray-400 font-normal">({todos.length})</span>
-            </h4>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-gray-50 text-gray-500">
-                  <th className="text-left px-2 py-1.5 border border-gray-200 font-medium">内容</th>
-                  <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-10">负责</th>
-                  <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-16">完成时间</th>
-                  {showOperator && <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-14">操作人</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {todos.map((t: any) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-2 py-1.5 border border-gray-200 text-gray-800">{t.content}</td>
-                    <td className="px-2 py-1.5 border border-gray-200 text-center text-teal-600 font-bold">{t.assignee_abbrev || '—'}</td>
-                    <td className="px-2 py-1.5 border border-gray-200 text-gray-500">
-                      {t.completed_at ? new Date(t.completed_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                    </td>
-                    {showOperator && <td className="px-2 py-1.5 border border-gray-200 text-gray-500">{t.completed_by_name || '—'}</td>}
+        {/* Todos — grouped by operator when showOperator=true (group stats) */}
+        {todos.length > 0 && (() => {
+          if (showOperator) {
+            // Group by completed_by_name
+            const opMap = new Map<string, any[]>()
+            for (const t of todos) {
+              const op = t.completed_by_name || '未知'
+              if (!opMap.has(op)) opMap.set(op, [])
+              opMap.get(op)!.push(t)
+            }
+            const opGroups = Array.from(opMap.entries())
+            return (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                  已完成待办 <span className="text-gray-400 font-normal">({todos.length})</span>
+                </h4>
+                <div className="space-y-2">
+                  {opGroups.map(([op, items]) => (
+                    <div key={op} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-indigo-50 px-3 py-1.5 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-indigo-700">{op}</span>
+                        <span className="text-[10px] text-indigo-400">{items.length} 项</span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {items.map((t: any) => (
+                          <div key={t.id} className="flex items-baseline gap-2 px-3 py-1.5 text-xs bg-white">
+                            <span className="text-gray-400 flex-shrink-0">
+                              {t.completed_at ? new Date(t.completed_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </span>
+                            <span className="text-gray-800 flex-1 leading-relaxed">{t.content}</span>
+                            {t.assignee_abbrev && (
+                              <span className="text-teal-600 font-bold flex-shrink-0">{t.assignee_abbrev}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+          // Personal stats — flat table (original layout)
+          return (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                已完成待办 <span className="text-gray-400 font-normal">({todos.length})</span>
+              </h4>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500">
+                    <th className="text-left px-2 py-1.5 border border-gray-200 font-medium">内容</th>
+                    <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-10">负责</th>
+                    <th className="text-left px-2 py-1.5 border border-gray-200 font-medium w-16">完成时间</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {todos.map((t: any) => (
+                    <tr key={t.id} className="hover:bg-gray-50">
+                      <td className="px-2 py-1.5 border border-gray-200 text-gray-800">{t.content}</td>
+                      <td className="px-2 py-1.5 border border-gray-200 text-center text-teal-600 font-bold">{t.assignee_abbrev || '—'}</td>
+                      <td className="px-2 py-1.5 border border-gray-200 text-gray-500">
+                        {t.completed_at ? new Date(t.completed_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
       </div>
     )
   }
