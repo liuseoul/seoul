@@ -315,7 +315,7 @@ export default function AdminDashboard({
                   </div>
                   <div>
                     <label className="block text-sm text-gray-700 mb-1">初始密码 *</label>
-                    <input type="password" value={memPassword} onChange={e => setMemPassword(e.target.value)}
+                    <input type="text" value={memPassword} onChange={e => setMemPassword(e.target.value)}
                       placeholder="至少 6 位" className="input-field" />
                   </div>
                   <div>
