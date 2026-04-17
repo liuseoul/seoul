@@ -6,7 +6,7 @@ const STATUS_LABELS: Record<string, string> = {
   active: '进行中',
   delayed: '已取消',
   completed: '已完成',
-  cancelled: '未启动',
+  cancelled: '未签约',
 }
 
 type EditForm = {
@@ -23,7 +23,7 @@ const EMPTY_FORM: EditForm = {
 const STATUS_EDIT = [
   { value: 'active',    label: '进行中' },
   { value: 'completed', label: '已完成' },
-  { value: 'cancelled', label: '未启动' },
+  { value: 'cancelled', label: '未签约' },
   { value: 'delayed',   label: '已取消' },
 ]
 
@@ -322,7 +322,7 @@ export default function ProjectDetailPanel({
             <option value="active">进行中</option>
             <option value="delayed">已取消</option>
             <option value="completed">已完成</option>
-            <option value="cancelled">未启动</option>
+            <option value="cancelled">未签约</option>
           </select>
         )}
         {isAdmin && (

@@ -8,7 +8,7 @@ const STATUS_LABELS: Record<string, string> = {
   active: '进行中',
   delayed: '已取消',
   completed: '已完成',
-  cancelled: '未启动',
+  cancelled: '未签约',
 }
 
 export default function AdminDashboard({
@@ -200,7 +200,7 @@ export default function AdminDashboard({
                     <label className="block text-sm text-gray-700 mb-1">初始状态</label>
                     <select value={projStatus} onChange={e => setProjStatus(e.target.value)} className="input-field">
                       <option value="active">进行中</option>
-                      <option value="cancelled">未启动</option>
+                      <option value="cancelled">未签约</option>
                     </select>
                   </div>
 

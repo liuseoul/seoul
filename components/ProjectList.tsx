@@ -11,7 +11,7 @@ const STATUS_LABELS: Record<string, string> = {
   active:    '进行中',
   delayed:   '已取消',
   completed: '已完成',
-  cancelled: '未启动',
+  cancelled: '未签约',
 }
 
 const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
@@ -113,7 +113,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       return ca >= statsStartDate && ca <= statsEndDate
     })
     const total      = range.length
-    const unstarted  = range.filter(p => p.status === 'cancelled').length  // 未启动
+    const unstarted  = range.filter(p => p.status === 'cancelled').length  // 未签约
     const cancelled  = range.filter(p => p.status === 'delayed').length    // 已取消
     const assigned   = total - unstarted - cancelled
     const finished   = range.filter(p => p.status === 'completed').length
@@ -188,7 +188,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const STATUS_EDIT = [
     { value: 'active',    label: '进行中' },
     { value: 'completed', label: '已完成' },
-    { value: 'cancelled', label: '未启动' },
+    { value: 'cancelled', label: '未签约' },
     { value: 'delayed',   label: '已取消' },
   ]
 
@@ -535,7 +535,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-teal-50">
                     <div>
                       <span className="text-sm text-gray-700">已签协议项目数</span>
-                      <p className="text-[10px] text-gray-400 mt-0.5">新增 − 未启动 − 已取消</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">新增 − 未签约 − 已取消</p>
                     </div>
                     <span className="text-2xl font-bold text-teal-600">{statsResult.assigned}</span>
                   </div>
