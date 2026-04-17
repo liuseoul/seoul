@@ -699,19 +699,19 @@ export default function Sidebar({ profile }: SidebarProps) {
             </button>
           ))}
 
-          {/* Personal daily stats — visible to all */}
+          {/* Personal work stats — visible to all */}
           <button
             onClick={() => { setShowPersonalStats(true); setPersonalRecords([]); setPersonalTimeLogs([]); setPersonalTodos([]); setPersonalQueried(false) }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150 text-left">
-            <span className="text-base">📊</span><span>个人日统计</span>
+            <span className="text-base">📊</span><span>个人工作统计</span>
           </button>
 
-          {/* Group daily stats — admin only */}
+          {/* Group work stats — admin only */}
           {isAdmin && (
             <button
               onClick={() => { setShowGroupStats(true); setGroupRecords([]); setGroupTimeLogs([]); setGroupTodos([]); setGroupQueried(false) }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150 text-left">
-              <span className="text-base">📊</span><span>团队日统计</span>
+              <span className="text-base">📊</span><span>团队工作统计</span>
             </button>
           )}
         </nav>
@@ -945,7 +945,7 @@ export default function Sidebar({ profile }: SidebarProps) {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">个人统计</h3>
+                <h3 className="text-base font-semibold text-gray-900">个人工作统计</h3>
                 <p className="text-xs text-gray-400 mt-0.5">{profile?.name}</p>
               </div>
               <button onClick={() => setShowPersonalStats(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
@@ -953,13 +953,22 @@ export default function Sidebar({ profile }: SidebarProps) {
             {/* Mode toggle + date inputs */}
             <div className="px-6 py-3 border-b border-gray-100 flex-shrink-0 space-y-3">
               <div className="flex gap-2">
-                {(['single', 'range'] as const).map(m => (
-                  <button key={m} onClick={() => { setPersonalMode(m); setPersonalQueried(false) }}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors
-                      ${personalMode === m ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 border border-gray-200'}`}>
-                    {m === 'single' ? '单日' : '区间'}
-                  </button>
-                ))}
+                {/* 单日 button — teal when active */}
+                <button onClick={() => { setPersonalMode('single'); setPersonalQueried(false) }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border
+                    ${personalMode === 'single'
+                      ? 'bg-teal-600 text-white border-teal-600'
+                      : 'text-gray-600 hover:bg-gray-100 border-gray-200'}`}>
+                  单日
+                </button>
+                {/* 区间 button — rose tint always; deeper when active */}
+                <button onClick={() => { setPersonalMode('range'); setPersonalQueried(false) }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border
+                    ${personalMode === 'range'
+                      ? 'bg-rose-400 text-white border-rose-400'
+                      : 'bg-rose-50 text-rose-500 border-rose-200 hover:bg-rose-100'}`}>
+                  区间
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 {personalMode === 'single' ? (
@@ -978,7 +987,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                   </>
                 )}
                 <button onClick={loadPersonalStats} disabled={personalLoading}
-                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg disabled:bg-gray-200 transition-colors">
+                  className={`px-5 py-2 text-white text-sm font-medium rounded-lg disabled:bg-gray-200 transition-colors
+                    ${personalMode === 'range'
+                      ? 'bg-rose-400 hover:bg-rose-500'
+                      : 'bg-teal-600 hover:bg-teal-700'}`}>
                   {personalLoading ? '查询中…' : '确认'}
                 </button>
                 {personalQueried && !personalLoading && (
@@ -994,24 +1006,33 @@ export default function Sidebar({ profile }: SidebarProps) {
         </div>
       )}
 
-      {/* ══ Group Daily Stats Modal (admin) ══════════════════ */}
+      {/* ══ Group Work Stats Modal (admin) ═══════════════════ */}
       {showGroupStats && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-              <h3 className="text-base font-semibold text-gray-900">团队统计</h3>
+              <h3 className="text-base font-semibold text-gray-900">团队工作统计</h3>
               <button onClick={() => setShowGroupStats(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
             {/* Mode toggle + date inputs */}
             <div className="px-6 py-3 border-b border-gray-100 flex-shrink-0 space-y-3">
               <div className="flex gap-2">
-                {(['single', 'range'] as const).map(m => (
-                  <button key={m} onClick={() => { setGroupMode(m); setGroupQueried(false) }}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors
-                      ${groupMode === m ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 border border-gray-200'}`}>
-                    {m === 'single' ? '单日' : '区间'}
-                  </button>
-                ))}
+                {/* 单日 button — teal when active */}
+                <button onClick={() => { setGroupMode('single'); setGroupQueried(false) }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border
+                    ${groupMode === 'single'
+                      ? 'bg-teal-600 text-white border-teal-600'
+                      : 'text-gray-600 hover:bg-gray-100 border-gray-200'}`}>
+                  单日
+                </button>
+                {/* 区间 button — rose tint always; deeper when active */}
+                <button onClick={() => { setGroupMode('range'); setGroupQueried(false) }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border
+                    ${groupMode === 'range'
+                      ? 'bg-rose-400 text-white border-rose-400'
+                      : 'bg-rose-50 text-rose-500 border-rose-200 hover:bg-rose-100'}`}>
+                  区间
+                </button>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 {groupMode === 'single' ? (
@@ -1030,7 +1051,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                   </>
                 )}
                 <button onClick={loadGroupStats} disabled={groupLoading}
-                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg disabled:bg-gray-200 transition-colors">
+                  className={`px-5 py-2 text-white text-sm font-medium rounded-lg disabled:bg-gray-200 transition-colors
+                    ${groupMode === 'range'
+                      ? 'bg-rose-400 hover:bg-rose-500'
+                      : 'bg-teal-600 hover:bg-teal-700'}`}>
                   {groupLoading ? '查询中…' : '确认'}
                 </button>
                 {groupQueried && !groupLoading && (
