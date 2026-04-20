@@ -42,6 +42,7 @@ type Reminder = {
   deleted_by_name: string | null
   deleted_at: string | null
   assigned_to_name: string | null
+  assigned_to_name_2: string | null
   profiles?: { name: string }
 }
 
@@ -345,6 +346,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [remEndTime,   setRemEndTime]   = useState('')
   const [remContent,   setRemContent]   = useState('')
   const [remAssigned,  setRemAssigned]  = useState('')
+  const [remAssigned2, setRemAssigned2] = useState('')
   const [remSaving,    setRemSaving]    = useState(false)
 
   // ── Detail / edit modal state ─────────────────────────────
@@ -357,6 +359,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const [editEndTime,   setEditEndTime]   = useState('')
   const [editContent,   setEditContent]   = useState('')
   const [editAssigned,  setEditAssigned]  = useState('')
+  const [editAssigned2, setEditAssigned2] = useState('')
   const [editSaving,    setEditSaving]    = useState(false)
 
   // ── Personal daily stats (all members) ───────────────────
@@ -426,6 +429,7 @@ export default function Sidebar({ profile }: SidebarProps) {
       content: remContent.trim(), type: remType,
       start_time: remStartTime || null, end_time: remEndTime || null,
       assigned_to_name: remAssigned || null,
+      assigned_to_name_2: remAssigned2 || null,
       created_by: user!.id,
     })
     if (error) { alert('保存失败：' + error.message) }
@@ -435,7 +439,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   function resetAddForm() {
     setRemContent(''); setRemStartDate(todayStr); setRemEndDate_(todayStr)
-    setRemType('others'); setRemStartTime(''); setRemEndTime(''); setRemAssigned('')
+    setRemType('others'); setRemStartTime(''); setRemEndTime(''); setRemAssigned(''); setRemAssigned2('')
   }
 
   // ── Detail modal helpers ──────────────────────────────────
@@ -450,6 +454,7 @@ export default function Sidebar({ profile }: SidebarProps) {
     setEditEndTime(r.end_time || '')
     setEditContent(r.content)
     setEditAssigned(r.assigned_to_name || '')
+    setEditAssigned2(r.assigned_to_name_2 || '')
     setDetailMode('edit')
   }
 
@@ -463,6 +468,7 @@ export default function Sidebar({ profile }: SidebarProps) {
       content: editContent.trim(), type: editType,
       start_time: editStartTime || null, end_time: editEndTime || null,
       assigned_to_name: editAssigned || null,
+      assigned_to_name_2: editAssigned2 || null,
     }).eq('id', selectedRem!.id)
     setEditSaving(false)
     if (error) { alert('保存失败：' + error.message); return }
@@ -567,14 +573,16 @@ export default function Sidebar({ profile }: SidebarProps) {
     )
   }
 
-  function MemberSelector({ current, onSet }: { current: string; onSet: (v: string) => void }) {
+  function MemberSelector({ current, onSet, showNone = true }: { current: string; onSet: (v: string) => void; showNone?: boolean }) {
     return (
       <div className="flex flex-wrap gap-1.5">
-        <button type="button" onClick={() => onSet('')}
-          className={`text-xs px-2 py-1 rounded border transition-colors
-            ${current === '' ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-          不指定
-        </button>
+        {showNone && (
+          <button type="button" onClick={() => onSet('')}
+            className={`text-xs px-2 py-1 rounded border transition-colors
+              ${current === '' ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+            不指定
+          </button>
+        )}
         {members.map(m => (
           <button key={m.id} type="button" onClick={() => onSet(m.name)}
             className={`text-xs px-2 py-1 rounded border transition-colors
@@ -618,8 +626,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                 {TYPE_LABELS[r.type] || r.type}
               </span>
             )}
-            {variant === 'upcoming' && r.assigned_to_name && (
-              <span className="text-[10px] text-indigo-500 font-medium">@{r.assigned_to_name}</span>
+            {variant === 'upcoming' && (r.assigned_to_name || r.assigned_to_name_2) && (
+              <span className="text-[10px] text-indigo-500 font-medium">
+                @{[r.assigned_to_name, r.assigned_to_name_2].filter(Boolean).join(' @')}
+              </span>
             )}
             {variant === 'upcoming' && r.start_time && (
               <span className="text-[10px] text-gray-400">
@@ -802,9 +812,16 @@ export default function Sidebar({ profile }: SidebarProps) {
                 onStartDate={setRemStartDate} onEndDate={setRemEndDate_}
                 onStartTime={setRemStartTime} onEndTime={setRemEndTime}
               />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">指定成员</label>
-                <MemberSelector current={remAssigned} onSet={setRemAssigned} />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">指定成员</label>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">负责人1</p>
+                  <MemberSelector current={remAssigned} onSet={setRemAssigned} showNone />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">负责人2</p>
+                  <MemberSelector current={remAssigned2} onSet={setRemAssigned2} showNone />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">内容 <span className="text-red-500">*</span></label>
@@ -868,9 +885,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                       <span>{fmtTime(selectedRem.start_time)}{selectedRem.end_time ? ` – ${fmtTime(selectedRem.end_time)}` : ''}</span>
                     </div>
                   )}
-                  {selectedRem.assigned_to_name && (
+                  {(selectedRem.assigned_to_name || selectedRem.assigned_to_name_2) && (
                     <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                      <span>👤</span><span>{selectedRem.assigned_to_name}</span>
+                      <span>👤</span>
+                      <span>{[selectedRem.assigned_to_name, selectedRem.assigned_to_name_2].filter(Boolean).join(' · ')}</span>
                     </div>
                   )}
 
@@ -915,9 +933,16 @@ export default function Sidebar({ profile }: SidebarProps) {
                     onStartDate={setEditStartDate} onEndDate={setEditEndDate_}
                     onStartTime={setEditStartTime} onEndTime={setEditEndTime}
                   />
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">指定成员</label>
-                    <MemberSelector current={editAssigned} onSet={setEditAssigned} />
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">指定成员</label>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">负责人1</p>
+                      <MemberSelector current={editAssigned} onSet={setEditAssigned} showNone />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">负责人2</p>
+                      <MemberSelector current={editAssigned2} onSet={setEditAssigned2} showNone />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">内容 <span className="text-red-500">*</span></label>
@@ -1105,8 +1130,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                               {TYPE_LABELS[r.type] || r.type}
                             </span>
                           )}
-                          {r.assigned_to_name && (
-                            <span className="text-[10px] text-indigo-500 font-medium">@{r.assigned_to_name}</span>
+                          {(r.assigned_to_name || r.assigned_to_name_2) && (
+                            <span className="text-[10px] text-indigo-500 font-medium">
+                              @{[r.assigned_to_name, r.assigned_to_name_2].filter(Boolean).join(' @')}
+                            </span>
                           )}
                           {r.start_time && (
                             <span className="text-[10px] text-gray-400">
