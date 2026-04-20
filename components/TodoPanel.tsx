@@ -87,10 +87,12 @@ interface TodoRowProps {
   editContent: string
   editAssignee1: string   // member name ('' = unassigned)
   editAssignee2: string
+  editDueDate: string
   editSaving: boolean
   onSetEditContent:   (v: string) => void
   onSetEditAssignee1: (v: string) => void
   onSetEditAssignee2: (v: string) => void
+  onSetEditDueDate:   (v: string) => void
   onMarkDone:         (todo: Todo) => void
   onStartEdit:        (todo: Todo) => void
   onCancelEdit:       () => void
@@ -104,8 +106,8 @@ interface TodoRowProps {
 function TodoRow({
   todo, index, isPending, members,
   currentUserId, isAdmin, profileName,
-  editingId, editContent, editAssignee1, editAssignee2, editSaving,
-  onSetEditContent, onSetEditAssignee1, onSetEditAssignee2,
+  editingId, editContent, editAssignee1, editAssignee2, editDueDate, editSaving,
+  onSetEditContent, onSetEditAssignee1, onSetEditAssignee2, onSetEditDueDate,
   onMarkDone, onStartEdit, onCancelEdit, onSaveEdit,
   onSoftDelete, onRestoreCompleted, onRestoreTodo, onHardDelete,
 }: TodoRowProps) {
@@ -116,7 +118,7 @@ function TodoRow({
   const isEditing = editingId === todo.id
 
   const canDelete           = isPending && !todo.deleted
-  const canRevise           = isPending && !todo.deleted && currentUserId === todo.created_by
+  const canRevise           = isPending && !todo.deleted && (isAdmin || currentUserId === todo.created_by)
   const canRestore          = todo.deleted && (currentUserId === todo.deleted_by || isAdmin)
   const canHardDel          = todo.deleted && isAdmin
   const canHardDelCompleted = done && !todo.deleted && isAdmin
@@ -162,6 +164,16 @@ function TodoRow({
             />
             <MemberPicker label="负责人1：" value={editAssignee1} members={members} onChange={onSetEditAssignee1} />
             <MemberPicker label="负责人2：" value={editAssignee2} members={members} onChange={onSetEditAssignee2} />
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-400">截止日期：</span>
+              <input type="date" value={editDueDate} onChange={e => onSetEditDueDate(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-1.5 py-0.5
+                           focus:outline-none focus:ring-1 focus:ring-teal-500" />
+              {editDueDate && (
+                <button type="button" onClick={() => onSetEditDueDate('')}
+                  className="text-[10px] text-gray-400 hover:text-red-400 transition-colors">清除</button>
+              )}
+            </div>
             <div className="flex gap-2">
               <button onClick={() => onSaveEdit(todo.id)} disabled={editSaving}
                 className="text-xs font-medium text-white bg-teal-600 hover:bg-teal-700
@@ -252,6 +264,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
   const [editContent,      setEditContent]      = useState('')
   const [editAssignee1,    setEditAssignee1]    = useState('')  // member name
   const [editAssignee2,    setEditAssignee2]    = useState('')  // member name
+  const [editDueDate,      setEditDueDate]      = useState('')
   const [editSaving,       setEditSaving]       = useState(false)
   const [showAllPending,   setShowAllPending]   = useState(false)
 
@@ -356,9 +369,10 @@ export default function TodoPanel({ profile }: { profile: any }) {
       members.find(m => m.name.slice(0, 1) === abbrev)?.name || ''
     setEditAssignee1(toName(todo.assignee_abbrev))
     setEditAssignee2(toName(todo.assignee_abbrev_2 || ''))
+    setEditDueDate(todo.due_date || '')
   }
 
-  function cancelEdit() { setEditingId(null); setEditContent(''); setEditAssignee1(''); setEditAssignee2('') }
+  function cancelEdit() { setEditingId(null); setEditContent(''); setEditAssignee1(''); setEditAssignee2(''); setEditDueDate('') }
 
   async function saveEdit(id: string) {
     if (!editContent.trim()) { alert('内容不能为空'); return }
@@ -367,6 +381,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
       content:           editContent.trim(),
       assignee_abbrev:   nameToAbbrev(editAssignee1),
       assignee_abbrev_2: nameToAbbrev(editAssignee2) || null,
+      due_date:          editDueDate || null,
     }).eq('id', id)
     if (error) { alert('修改失败：' + error.message); setEditSaving(false); return }
     setEditingId(null); setEditContent(''); setEditAssignee1(''); setEditAssignee2('')
@@ -420,10 +435,11 @@ export default function TodoPanel({ profile }: { profile: any }) {
 
   const rowProps = {
     members, currentUserId, isAdmin, profileName: profile?.name || null,
-    editingId, editContent, editAssignee1, editAssignee2, editSaving,
+    editingId, editContent, editAssignee1, editAssignee2, editDueDate, editSaving,
     onSetEditContent:   setEditContent,
     onSetEditAssignee1: setEditAssignee1,
     onSetEditAssignee2: setEditAssignee2,
+    onSetEditDueDate:   setEditDueDate,
     onMarkDone:         markDone,
     onStartEdit:        startEdit,
     onCancelEdit:       cancelEdit,
