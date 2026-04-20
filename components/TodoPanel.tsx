@@ -110,7 +110,9 @@ function TodoRow({
   onSoftDelete, onRestoreCompleted, onRestoreTodo, onHardDelete,
 }: TodoRowProps) {
   const done      = todo.completed
-  const rowBg     = isPending ? PENDING_BG[index % 2] : ''
+  const todayStr  = new Date().toISOString().split('T')[0]
+  const isDue     = isPending && !done && !todo.deleted && !!todo.due_date && todo.due_date <= todayStr
+  const rowBg     = isDue ? 'bg-yellow-50' : isPending ? PENDING_BG[index % 2] : ''
   const isEditing = editingId === todo.id
 
   const canDelete           = isPending && !todo.deleted
@@ -123,7 +125,9 @@ function TodoRow({
 
   return (
     <div className={`flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
-      ${isPending
+      ${isDue
+        ? 'bg-yellow-50 border-yellow-300 hover:bg-yellow-100'
+        : isPending
         ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
         : 'border-transparent hover:bg-gray-100'}`}
     >
@@ -431,7 +435,7 @@ export default function TodoPanel({ profile }: { profile: any }) {
   }
 
   return (
-    <div className="w-[480px] bg-gray-50 border-l border-gray-200 flex flex-col h-full flex-shrink-0">
+    <div className="w-[384px] bg-gray-50 border-l border-gray-200 flex flex-col h-full flex-shrink-0">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
