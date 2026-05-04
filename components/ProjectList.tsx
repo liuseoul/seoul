@@ -196,7 +196,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
     <div className="flex h-screen overflow-hidden">
       <Sidebar profile={profile} />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="w-[768px] flex-shrink-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
         <div className="flex items-center gap-1.5 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0">
           {/* Title */}
@@ -235,9 +235,8 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
             项目排序
           </button>
 
-          {/* Right: count + new project */}
+          {/* Right: new project */}
           <div className="ml-auto flex items-center gap-3 flex-shrink-0">
-            <span className="text-xs text-gray-400">共 {filtered.length} 个</span>
             {isAdmin && (
               <button onClick={() => router.push('/admin')}
                 className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
