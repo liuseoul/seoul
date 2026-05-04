@@ -771,17 +771,23 @@ export default function ProjectDetailPanel({
               <button
                 disabled={exportSelected.size === 0}
                 onClick={() => {
-                  const rows: string[][] = [['成员', '开始时间', '结束时间', '时长(分钟)', '说明']]
+                  const rows: string[][] = [['成员', '日期', '开始时间', '结束时间', '时长(分钟)', '说明']]
                   timeLogs
                     .filter((l: any) => !l.deleted && exportSelected.has(l.id))
                     .forEach((l: any) => {
-                      const mins = l.finished_at
-                        ? String(Math.round((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 60000))
+                      const start = new Date(l.started_at)
+                      const end   = l.finished_at ? new Date(l.finished_at) : null
+                      const dateStr = start.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+                      const startTime = start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                      const endTime   = end ? end.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''
+                      const mins = end
+                        ? String(Math.round((end.getTime() - start.getTime()) / 60000))
                         : ''
                       rows.push([
                         l.profiles?.name || '',
-                        formatDateTime(l.started_at),
-                        l.finished_at ? formatDateTime(l.finished_at) : '',
+                        dateStr,
+                        startTime,
+                        endTime,
                         mins,
                         l.description || '',
                       ])
