@@ -197,46 +197,56 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       <Sidebar profile={profile} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 flex-shrink-0">
-          <h1 className="text-lg font-semibold text-gray-900">项目概览</h1>
-          {isAdmin && (
-            <button
-              onClick={() => router.push('/admin')}
-              className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
-                         text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-150"
-            >
-              <span className="text-base leading-none">+</span>
-              <span>新建项目</span>
-            </button>
-          )}
-        </div>
+        {/* Header + filter bar — single unified row */}
+        <div className="flex items-center gap-1.5 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0">
+          {/* Title */}
+          <h1 className="text-base font-semibold text-gray-900 mr-2 flex-shrink-0">项目概览</h1>
+          <span className="w-px h-5 bg-gray-200 flex-shrink-0 mx-1" />
 
-        {/* Status filter */}
-        <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-gray-200 flex-shrink-0">
-          {STATUS_ORDER.map(key => (
-            <button key={key} onClick={() => setFilter(key)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
-                ${filter === key ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>
-              {STATUS_LABELS[key]}
-              {key !== 'all' && (
-                <span className="ml-1.5 text-xs opacity-70">
-                  {projects.filter((p: any) => p.status === key).length}
+          {/* Status filter buttons with dividers */}
+          {STATUS_ORDER.map((key, i) => (
+            <div key={key} className="flex items-center gap-1.5">
+              {i > 0 && <span className="w-px h-4 bg-gray-200 flex-shrink-0" />}
+              <button onClick={() => setFilter(key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
+                  ${filter === key ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>
+                {STATUS_LABELS[key]}
+                <span className="ml-1 text-xs opacity-70">
+                  {key === 'all'
+                    ? projects.length
+                    : projects.filter((p: any) => p.status === key).length}
                 </span>
-              )}
-            </button>
+              </button>
+            </div>
           ))}
+
+          {/* Divider before utility buttons */}
+          <span className="w-px h-5 bg-gray-200 flex-shrink-0 mx-1" />
+
+          {/* Utility buttons */}
           <button onClick={() => { setShowStats(true); setStatsResult(null) }}
-            className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
-                       bg-amber-500 hover:bg-amber-600 text-white shadow-sm">
+            className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
+                       bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex-shrink-0">
             项目统计
           </button>
           <button onClick={() => { setPendingSort(sortMode); setShowSortPicker(true) }}
-            className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150
-                       bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm">
+            className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
+                       bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm flex-shrink-0">
             项目排序
           </button>
-          <span className="ml-auto text-xs text-gray-400">共 {filtered.length} 个项目</span>
+
+          {/* Right: count + new project */}
+          <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+            <span className="text-xs text-gray-400">共 {filtered.length} 个</span>
+            {isAdmin && (
+              <button onClick={() => router.push('/admin')}
+                className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
+                           text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-150">
+                <span className="text-base leading-none">+</span>
+                <span>新建项目</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Project list */}

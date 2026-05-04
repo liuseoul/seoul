@@ -56,6 +56,17 @@ function durMinutes(started: string, finished: string | null): string {
   return `${mins} 分钟`
 }
 
+function downloadCSV(filename: string, rows: string[][]) {
+  const csv = rows
+    .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
 function localDatetime(dateStr: string, timeStr: string): string {
   const [y, mo, d] = dateStr.split('-').map(Number)
   const [h, mi]    = timeStr.split(':').map(Number)
@@ -76,6 +87,8 @@ export default function ProjectDetailPanel({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [statusChanging, setStatusChanging] = useState(false)
   const [showTimeStats,  setShowTimeStats]  = useState(false)
+  const [showExport,     setShowExport]     = useState(false)
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set())
 
   // ── Edit project modal ────────────────────────────────────
   const [showEdit,   setShowEdit]   = useState(false)
@@ -428,6 +441,16 @@ export default function ProjectDetailPanel({
               >
                 统计
               </button>
+              <button
+                onClick={() => {
+                  setExportSelected(new Set(timeLogs.filter((l: any) => !l.deleted).map((l: any) => l.id)))
+                  setShowExport(true)
+                }}
+                className="px-4 py-2 rounded-lg border border-teal-300 text-teal-600 text-sm font-medium
+                           hover:bg-teal-50 transition-colors"
+              >
+                导出
+              </button>
             </div>
 
             {timeLogs.length === 0 && (
@@ -680,6 +703,94 @@ export default function ProjectDetailPanel({
                 className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
                 {editSaving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Export Time Logs Modal ── */}
+      {showExport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">导出工时记录 — {project.name}</h3>
+              <button onClick={() => setShowExport(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            {/* Select all / deselect all */}
+            <div className="px-6 py-2 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
+              <button onClick={() => setExportSelected(new Set(timeLogs.filter((l: any) => !l.deleted).map((l: any) => l.id)))}
+                className="text-xs text-teal-600 hover:text-teal-800 transition-colors">全选</button>
+              <button onClick={() => setExportSelected(new Set())}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors">取消全选</button>
+              <span className="ml-auto text-xs text-gray-400">已选 {exportSelected.size} 条</span>
+            </div>
+
+            {/* Item list */}
+            <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
+              {timeLogs.filter((l: any) => !l.deleted).length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">暂无工时记录</p>
+              ) : (
+                timeLogs.filter((l: any) => !l.deleted).map((l: any) => {
+                  const checked = exportSelected.has(l.id)
+                  const dur = durMinutes(l.started_at, l.finished_at)
+                  return (
+                    <label key={l.id}
+                      className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors
+                        ${checked ? 'border-teal-400 bg-teal-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <input type="checkbox" checked={checked} onChange={e => {
+                        const next = new Set(exportSelected)
+                        e.target.checked ? next.add(l.id) : next.delete(l.id)
+                        setExportSelected(next)
+                      }} className="mt-0.5 accent-teal-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-gray-800">{l.profiles?.name || '未知'}</span>
+                          <span className="text-xs text-teal-600 font-semibold">{dur}</span>
+                          <span className="text-xs text-gray-400">{formatDateTime(l.started_at)}
+                            {l.finished_at && ` — ${new Date(l.finished_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`}
+                          </span>
+                        </div>
+                        {l.description && (
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">{l.description}</p>
+                        )}
+                      </div>
+                    </label>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button onClick={() => setShowExport(false)}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                取消
+              </button>
+              <button
+                disabled={exportSelected.size === 0}
+                onClick={() => {
+                  const rows: string[][] = [['成员', '开始时间', '结束时间', '时长(分钟)', '说明']]
+                  timeLogs
+                    .filter((l: any) => !l.deleted && exportSelected.has(l.id))
+                    .forEach((l: any) => {
+                      const mins = l.finished_at
+                        ? String(Math.round((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 60000))
+                        : ''
+                      rows.push([
+                        l.profiles?.name || '',
+                        formatDateTime(l.started_at),
+                        l.finished_at ? formatDateTime(l.finished_at) : '',
+                        mins,
+                        l.description || '',
+                      ])
+                    })
+                  downloadCSV(`${project.name}_工时记录.csv`, rows)
+                }}
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
+                导出 CSV ({exportSelected.size} 条)
               </button>
             </div>
           </div>
