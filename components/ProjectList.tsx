@@ -196,7 +196,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
     <div className="flex h-screen overflow-hidden">
       <Sidebar profile={profile} />
 
-      <div className="w-[768px] flex-shrink-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
         <div className="flex items-center gap-1.5 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0">
           {/* Title */}
