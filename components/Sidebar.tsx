@@ -693,9 +693,9 @@ export default function Sidebar({ profile }: SidebarProps) {
 
         {/* Logo — clickable, goes to main page */}
         <button onClick={() => router.push('/projects')}
-          className="px-5 py-5 border-b border-teal-200 flex-shrink-0 w-full text-left bg-teal-100 hover:bg-teal-200 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0">D</div>
+          className="px-4 py-3 border-b border-teal-200 flex-shrink-0 w-full text-left bg-teal-100 hover:bg-teal-200 transition-colors">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 bg-teal-600 rounded-md flex items-center justify-center text-xs font-bold text-white flex-shrink-0">D</div>
             <div className="text-sm font-semibold text-gray-900 leading-tight">Deheng Seoul</div>
           </div>
         </button>
@@ -721,8 +721,8 @@ export default function Sidebar({ profile }: SidebarProps) {
 
         {/* 日程安排 */}
         <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0 bg-violet-100 border-b border-violet-200">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">日程安排</span>
+          <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 bg-violet-100 border-b border-violet-200">
+            <span className="text-sm font-semibold text-gray-700">日程安排</span>
             <div className="flex items-center gap-1">
               <button onClick={() => setShowCalendarAll(true)}
                 className="text-xs text-gray-500 hover:text-teal-600 px-2 py-0.5 rounded border border-gray-300 hover:border-teal-400 transition-colors">
