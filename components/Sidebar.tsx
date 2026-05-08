@@ -780,8 +780,8 @@ export default function Sidebar({ profile }: SidebarProps) {
               <button onClick={() => router.push('/admin')}
                 className={`ml-2 flex-shrink-0 px-3 py-1 text-xs font-medium rounded border transition-colors
                   ${pathname === '/admin'
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : 'text-gray-600 border-gray-300 hover:bg-gray-50 hover:border-gray-400'}`}>
+                    ? 'bg-teal-700 text-white border-teal-700'
+                    : 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'}`}>
                 管理
               </button>
             )}

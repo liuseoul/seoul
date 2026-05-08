@@ -258,7 +258,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
-        <div className="flex items-center gap-1.5 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center gap-1.5 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0 overflow-x-auto">
           {/* Title */}
           <h1 className="text-base font-semibold text-gray-900 mr-2 flex-shrink-0">项目概览</h1>
           <span className="w-px h-5 bg-gray-200 flex-shrink-0 mx-1" />
@@ -352,9 +352,6 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                     <span className={isCancelled ? 'line-through' : ''}>
                       委托方：{project.client || '—'}
                     </span>
-                    {project.agreement_party && (
-                      <span className="text-xs text-indigo-500 font-medium">{project.agreement_party}</span>
-                    )}
                   </div>
                 </div>
 
