@@ -258,11 +258,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
-        <div className="flex items-center gap-1.5 px-5 py-3 bg-amber-50 border-b border-amber-100 flex-shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1.5 px-5 py-3 bg-amber-100 border-b border-amber-200 flex-shrink-0 overflow-x-auto">
           {/* Title + total count */}
           <h1 className="text-base font-semibold text-gray-900 flex-shrink-0 mr-1">项目概览</h1>
           <span className="text-base font-bold text-teal-600 flex-shrink-0 mr-1">{projects.length}</span>
-          <span className="w-px h-5 bg-amber-200 flex-shrink-0 mx-1" />
+          <span className="w-px h-5 bg-amber-300 flex-shrink-0 mx-1" />
 
           {/* Status filter buttons with dividers — skip 'all' */}
           {STATUS_ORDER.filter(k => k !== 'all').map((key, i) => (
@@ -280,7 +280,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           ))}
 
           {/* Divider before utility buttons */}
-          <span className="w-px h-5 bg-amber-200 flex-shrink-0 mx-1" />
+          <span className="w-px h-5 bg-amber-300 flex-shrink-0 mx-1" />
 
           {/* Utility buttons */}
           <button onClick={() => { setShowStats(true); setStatsResult(null) }}
