@@ -258,11 +258,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
-        <div className="flex items-center gap-1.5 px-5 py-3 bg-teal-50 border-b border-teal-100 flex-shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1.5 px-5 py-3 bg-amber-50 border-b border-amber-100 flex-shrink-0 overflow-x-auto">
           {/* Title + total count */}
           <h1 className="text-base font-semibold text-gray-900 flex-shrink-0 mr-1">项目概览</h1>
           <span className="text-base font-bold text-teal-600 flex-shrink-0 mr-1">{projects.length}</span>
-          <span className="w-px h-5 bg-teal-200 flex-shrink-0 mx-1" />
+          <span className="w-px h-5 bg-amber-200 flex-shrink-0 mx-1" />
 
           {/* Status filter buttons with dividers — skip 'all' */}
           {STATUS_ORDER.filter(k => k !== 'all').map((key, i) => (
@@ -280,7 +280,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           ))}
 
           {/* Divider before utility buttons */}
-          <span className="w-px h-5 bg-teal-200 flex-shrink-0 mx-1" />
+          <span className="w-px h-5 bg-amber-200 flex-shrink-0 mx-1" />
 
           {/* Utility buttons */}
           <button onClick={() => { setShowStats(true); setStatsResult(null) }}
@@ -297,11 +297,13 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           {/* Right: new project */}
           <div className="ml-auto flex items-center gap-3 flex-shrink-0">
             {isAdmin && (
-              <button onClick={() => setShowCreateProj(true)}
-                className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
-                           text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-150">
-                <span className="text-base leading-none">+</span>
-                <span>新建项目</span>
+              <button onClick={() => setShowCreateProj(true)} title="新建项目"
+                className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-600 hover:bg-teal-500
+                           shadow-md hover:shadow-lg hover:scale-110 transition-all duration-200
+                           flex items-center justify-center text-white">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
               </button>
             )}
           </div>
