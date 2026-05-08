@@ -580,17 +580,30 @@ export default function ProjectDetailPanel({
                 className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
 
-            {/* Summary bar */}
+            {/* Summary bar — personal + team side by side */}
             {(() => {
               const nonDeleted = timeLogs.filter((l: any) => !l.deleted)
-              const totalMins = nonDeleted.reduce((sum: number, l: any) => {
+              const myLogs  = nonDeleted.filter((l: any) => l.member_id === currentUserId)
+              const calcMins = (list: any[]) => list.reduce((sum: number, l: any) => {
                 if (!l.finished_at) return sum
                 return sum + Math.round((new Date(l.finished_at).getTime() - new Date(l.started_at).getTime()) / 60000)
               }, 0)
+              const myMins   = calcMins(myLogs)
+              const allMins  = calcMins(nonDeleted)
               return (
-                <div className="px-6 py-2.5 bg-teal-50 border-b border-teal-100 flex-shrink-0 flex items-center gap-4 text-sm">
-                  <span className="text-teal-700">共 <strong>{nonDeleted.length}</strong> 条有效记录</span>
-                  <span className="text-teal-700">合计 <strong>{totalMins}</strong> 分钟</span>
+                <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0 grid grid-cols-2 gap-3">
+                  {/* Personal */}
+                  <div className="rounded-xl bg-teal-50 border border-teal-200 px-4 py-2.5">
+                    <p className="text-[11px] font-medium text-teal-500 mb-1">我的工时</p>
+                    <p className="text-xl font-bold text-teal-700 leading-none">{myMins}<span className="text-sm font-normal ml-1">分钟</span></p>
+                    <p className="text-[11px] text-teal-400 mt-1">{myLogs.length} 条记录</p>
+                  </div>
+                  {/* Team */}
+                  <div className="rounded-xl bg-violet-50 border border-violet-200 px-4 py-2.5">
+                    <p className="text-[11px] font-medium text-violet-500 mb-1">团队工时</p>
+                    <p className="text-xl font-bold text-violet-700 leading-none">{allMins}<span className="text-sm font-normal ml-1">分钟</span></p>
+                    <p className="text-[11px] text-violet-400 mt-1">{nonDeleted.length} 条记录</p>
+                  </div>
                 </div>
               )
             })()}
