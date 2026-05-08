@@ -4,36 +4,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Sidebar from './Sidebar'
 
-const STATUS_LABELS: Record<string, string> = {
-  active: '进行中',
-  delayed: '已取消',
-  completed: '已完成',
-  cancelled: '未签约',
-}
-
 export default function AdminDashboard({
-  profile, projects, members,
+  profile, members,
 }: {
   profile: any
-  projects: any[]
   members: any[]
 }) {
   const router = useRouter()
   const supabase = createClient()
-  const [tab, setTab] = useState<'projects' | 'members'>('projects')
-
-  // 新建项目表单
-  const [projName, setProjName] = useState('')
-  const [projClient, setProjClient] = useState('')
-  const [projDesc, setProjDesc] = useState('')
-  const [projStatus, setProjStatus] = useState('active')
-  const [projAgreement, setProjAgreement] = useState('Deheng Beijing')
-  const [projCurrency, setProjCurrency] = useState('CNY')
-  const [projAmount, setProjAmount] = useState('')
-  const [collabParties, setCollabParties] = useState([''])
-  const [projSaving, setProjSaving] = useState(false)
-  const [projMsg, setProjMsg] = useState('')
-
   // 新建成员表单
   const [memName, setMemName] = useState('')
   const [memUsername, setMemUsername] = useState('')
@@ -47,56 +25,6 @@ export default function AdminDashboard({
   const [resetPwd, setResetPwd] = useState('')
   const [resetSaving, setResetSaving] = useState(false)
   const [resetMsg, setResetMsg] = useState('')
-
-  function addCollabParty() {
-    setCollabParties([...collabParties, ''])
-  }
-
-  function updateCollabParty(index: number, value: string) {
-    const updated = [...collabParties]
-    updated[index] = value
-    setCollabParties(updated)
-  }
-
-  function removeCollabParty(index: number) {
-    if (collabParties.length === 1) return
-    setCollabParties(collabParties.filter((_, i) => i !== index))
-  }
-
-  async function createProject() {
-    if (!projName.trim() || !projClient.trim()) {
-      setProjMsg('❌ 项目名称和委托方为必填')
-      return
-    }
-    setProjSaving(true)
-    setProjMsg('')
-
-    const { data: { user } } = await supabase.auth.getUser()
-    const parties = collabParties.map(p => p.trim()).filter(Boolean)
-
-    const { error } = await supabase.from('projects').insert({
-      name: projName.trim(),
-      client: projClient.trim(),
-      description: projDesc.trim(),
-      status: projStatus,
-      agreement_party: projAgreement,
-      service_fee_currency: projCurrency,
-      service_fee_amount: projAmount ? parseFloat(projAmount) : null,
-      collaboration_parties: parties,
-      created_by: user!.id,
-    })
-
-    if (error) {
-      setProjMsg(`❌ 创建失败：${error.message}`)
-    } else {
-      setProjMsg('✅ 项目已创建')
-      setProjName(''); setProjClient(''); setProjDesc('')
-      setProjStatus('active'); setProjAgreement('Deheng Beijing')
-      setProjCurrency('CNY'); setProjAmount(''); setCollabParties([''])
-      setTimeout(() => router.refresh(), 800)
-    }
-    setProjSaving(false)
-  }
 
   async function createMember() {
     if (!memName.trim() || !memUsername.trim() || !memPassword) {
@@ -152,150 +80,10 @@ export default function AdminDashboard({
           <h1 className="text-lg font-semibold text-gray-900">管理后台</h1>
         </div>
 
-        <div className="flex border-b border-gray-200 bg-white px-6 flex-shrink-0">
-          {(['projects', 'members'] as const).map(key => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors
-                ${tab === key ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-            >
-              {key === 'projects' ? '项目管理' : '成员管理'}
-            </button>
-          ))}
-        </div>
-
         <div className="flex-1 overflow-y-auto p-6">
 
-          {/* ======== 项目管理 ======== */}
-          {tab === 'projects' && (
-            <div className="max-w-3xl space-y-6">
-              <section className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-4">新建项目</h2>
-                <div className="grid grid-cols-2 gap-4">
-
-                  {/* 项目名称 */}
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-sm text-gray-700 mb-1">项目名称 *</label>
-                    <input value={projName} onChange={e => setProjName(e.target.value)}
-                      placeholder="请输入项目名称" className="input-field" />
-                  </div>
-
-                  {/* 委托方 */}
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-sm text-gray-700 mb-1">委托方 *</label>
-                    <input value={projClient} onChange={e => setProjClient(e.target.value)}
-                      placeholder="委托方名称" className="input-field" />
-                  </div>
-
-                  {/* 项目描述 */}
-                  <div className="col-span-2">
-                    <label className="block text-sm text-gray-700 mb-1">项目描述</label>
-                    <textarea value={projDesc} onChange={e => setProjDesc(e.target.value)}
-                      placeholder="简要描述（可选）" rows={2} className="input-field resize-none" />
-                  </div>
-
-                  {/* 初始状态 */}
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">初始状态</label>
-                    <select value={projStatus} onChange={e => setProjStatus(e.target.value)} className="input-field">
-                      <option value="active">进行中</option>
-                      <option value="cancelled">未签约</option>
-                    </select>
-                  </div>
-
-                  {/* 签约方 */}
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">签约方</label>
-                    <select value={projAgreement} onChange={e => setProjAgreement(e.target.value)} className="input-field">
-                      <option value="Deheng Beijing">Deheng Beijing</option>
-                      <option value="Deheng Seoul">Deheng Seoul</option>
-                    </select>
-                  </div>
-
-                  {/* 服务费币种 + 金额 */}
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">服务费币种</label>
-                    <select value={projCurrency} onChange={e => setProjCurrency(e.target.value)} className="input-field">
-                      <option value="CNY">CNY（人民币）</option>
-                      <option value="KRW">KRW（韩元）</option>
-                      <option value="USD">USD（美元）</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">服务费金额</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={projAmount}
-                      onChange={e => setProjAmount(e.target.value)}
-                      placeholder="可选"
-                      className="input-field"
-                    />
-                  </div>
-
-                  {/* 协作方 */}
-                  <div className="col-span-2">
-                    <label className="block text-sm text-gray-700 mb-1">协作方</label>
-                    <div className="space-y-2">
-                      {collabParties.map((party, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <input
-                            value={party}
-                            onChange={e => updateCollabParty(i, e.target.value)}
-                            placeholder={`协作方 ${i + 1}`}
-                            className="input-field flex-1"
-                          />
-                          {collabParties.length > 1 && (
-                            <button
-                              onClick={() => removeCollabParty(i)}
-                              className="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
-                              title="移除"
-                            >×</button>
-                          )}
-                        </div>
-                      ))}
-                      <button
-                        onClick={addCollabParty}
-                        className="flex items-center gap-1 text-sm text-teal-600 hover:text-teal-800 font-medium"
-                      >
-                        <span className="text-lg leading-none">+</span> 添加协作方
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {projMsg && <p className="mt-3 text-sm">{projMsg}</p>}
-                <button onClick={createProject} disabled={projSaving} className="mt-4 btn-primary">
-                  {projSaving ? '创建中…' : '创建项目'}
-                </button>
-              </section>
-
-              {/* 现有项目列表 */}
-              <section className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-4">
-                  现有项目 <span className="text-gray-400 font-normal text-sm">（{projects.length} 个）</span>
-                </h2>
-                <div className="space-y-2">
-                  {projects.map((p: any) => (
-                    <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
-                      <div>
-                        <div className="text-sm font-bold text-gray-900">{p.name}</div>
-                        <div className="text-xs text-gray-500">委托方：{p.client}</div>
-                      </div>
-                      <span className={`status-tag st-${p.status}`}>{STATUS_LABELS[p.status]}</span>
-                    </div>
-                  ))}
-                  {projects.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">暂无项目</p>}
-                </div>
-              </section>
-            </div>
-          )}
-
           {/* ======== 成员管理 ======== */}
-          {tab === 'members' && (
-            <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl space-y-6">
               <section className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-4">创建成员</h2>
                 <div className="grid grid-cols-2 gap-4">
@@ -387,8 +175,7 @@ export default function AdminDashboard({
                   </table>
                 </div>
               </section>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

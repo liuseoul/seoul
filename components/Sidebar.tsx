@@ -685,25 +685,19 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   return (
     <>
-      <div className="w-72 bg-white border-r border-gray-200 text-gray-900 flex flex-col h-full flex-shrink-0">
+      <div className="w-[384px] bg-white border-r border-gray-200 text-gray-900 flex flex-col h-full flex-shrink-0">
 
-        {/* Logo */}
-        <div className="px-5 py-5 border-b border-gray-200 flex-shrink-0">
+        {/* Logo — clickable, goes to main page */}
+        <button onClick={() => router.push('/projects')}
+          className="px-5 py-5 border-b border-gray-200 flex-shrink-0 w-full text-left hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0">D</div>
             <div className="text-sm font-semibold text-gray-900 leading-tight">Deheng Seoul</div>
           </div>
-        </div>
+        </button>
 
         {/* Navigation */}
         <nav className="px-3 py-3 space-y-1 border-b border-gray-200 flex-shrink-0">
-          <button onClick={() => router.push('/projects')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 text-left
-              ${pathname === '/projects' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
-            <span className="text-base">📋</span>
-            <span>项目概览</span>
-          </button>
-
           {/* Personal work stats — visible to all */}
           <button
             onClick={() => { setShowPersonalStats(true); setPersonalRecords([]); setPersonalTimeLogs([]); setPersonalTodos([]); setPersonalQueried(false) }}
@@ -731,7 +725,7 @@ export default function Sidebar({ profile }: SidebarProps) {
                 全部
               </button>
               <button onClick={() => setShowAddRem(true)}
-                className="text-xs text-gray-500 hover:text-teal-600 px-2 py-0.5 rounded border border-gray-300 hover:border-teal-400 transition-colors">
+                className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium px-2 py-0.5 rounded transition-colors">
                 + 添加
               </button>
             </div>
@@ -783,14 +777,12 @@ export default function Sidebar({ profile }: SidebarProps) {
               <div className="text-xs text-gray-400 mt-0.5">{isAdmin ? 'Administrator' : 'Member'}</div>
             </div>
             {isAdmin && (
-              <button onClick={() => router.push('/admin')} title="管理后台"
-                className={`ml-2 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors
-                  ${pathname === '/admin' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+              <button onClick={() => router.push('/admin')}
+                className={`ml-2 flex-shrink-0 px-3 py-1 text-xs font-medium rounded border transition-colors
+                  ${pathname === '/admin'
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'text-gray-600 border-gray-300 hover:bg-gray-50 hover:border-gray-400'}`}>
+                管理
               </button>
             )}
           </div>

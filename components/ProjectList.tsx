@@ -18,6 +18,24 @@ const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
 
 const ROW_COLORS = ['bg-white', 'bg-teal-50']
 
+// Pill colours for status filter buttons
+const STATUS_PILL_ON: Record<string, string> = {
+  all:       'bg-teal-600 text-white shadow-sm',
+  active:    'bg-teal-600 text-white shadow-sm',
+  delayed:   'bg-amber-500 text-white shadow-sm',
+  completed: 'bg-green-600 text-white shadow-sm',
+  cancelled: 'bg-gray-500 text-white shadow-sm',
+}
+const STATUS_PILL_OFF: Record<string, string> = {
+  all:       'text-gray-600 hover:bg-gray-100',
+  active:    'bg-teal-50 text-teal-700 hover:bg-teal-100',
+  delayed:   'bg-amber-50 text-amber-700 hover:bg-amber-100',
+  completed: 'bg-green-50 text-green-700 hover:bg-green-100',
+  cancelled: 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+}
+
+const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询']
+
 function calcHours(logs: Array<{ started_at: string; finished_at: string | null; deleted?: boolean }>) {
   return logs
     .reduce((sum, log) => {
@@ -88,6 +106,48 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [sortMode,       setSortMode]       = useState<'activity' | 'created'>('activity')
   const [pendingSort,    setPendingSort]    = useState<'activity' | 'created'>('activity')
+
+  // ── Create project modal ────────────────────────────────────
+  const [showCreateProj,   setShowCreateProj]   = useState(false)
+  const [newProjName,      setNewProjName]      = useState('')
+  const [newProjClient,    setNewProjClient]    = useState('')
+  const [newProjMatterType,setNewProjMatterType]= useState('')
+  const [newProjDesc,      setNewProjDesc]      = useState('')
+  const [newProjStatus,    setNewProjStatus]    = useState('active')
+  const [newProjAgreement, setNewProjAgreement] = useState('Deheng Beijing')
+  const [newProjCurrency,  setNewProjCurrency]  = useState('CNY')
+  const [newProjAmount,    setNewProjAmount]    = useState('')
+  const [newProjCollab,    setNewProjCollab]    = useState([''])
+  const [newProjSaving,    setNewProjSaving]    = useState(false)
+  const [newProjMsg,       setNewProjMsg]       = useState('')
+
+  async function createProject() {
+    if (!newProjName.trim() || !newProjClient.trim()) {
+      setNewProjMsg('❌ 项目名称和委托方为必填'); return
+    }
+    setNewProjSaving(true); setNewProjMsg('')
+    const { data: { user } } = await supabase.auth.getUser()
+    const parties = newProjCollab.map(p => p.trim()).filter(Boolean)
+    const { error } = await supabase.from('projects').insert({
+      name: newProjName.trim(), client: newProjClient.trim(),
+      description: newProjDesc.trim() || null,
+      matter_type: newProjMatterType || null,
+      status: newProjStatus, agreement_party: newProjAgreement,
+      service_fee_currency: newProjCurrency,
+      service_fee_amount: newProjAmount ? parseFloat(newProjAmount) : null,
+      collaboration_parties: parties, created_by: user!.id,
+    })
+    if (error) {
+      setNewProjMsg(`❌ 创建失败：${error.message}`)
+    } else {
+      setNewProjMsg('✅ 项目已创建')
+      setNewProjName(''); setNewProjClient(''); setNewProjDesc(''); setNewProjMatterType('')
+      setNewProjStatus('active'); setNewProjAgreement('Deheng Beijing')
+      setNewProjCurrency('CNY'); setNewProjAmount(''); setNewProjCollab([''])
+      setTimeout(() => { setShowCreateProj(false); setNewProjMsg(''); router.refresh() }, 800)
+    }
+    setNewProjSaving(false)
+  }
 
   function openEdit(e: React.MouseEvent, project: any) {
     e.stopPropagation()   // don't select the row
@@ -209,7 +269,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
               {i > 0 && <span className="w-px h-4 bg-gray-200 flex-shrink-0" />}
               <button onClick={() => setFilter(key)}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
-                  ${filter === key ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>
+                  ${filter === key ? STATUS_PILL_ON[key] : STATUS_PILL_OFF[key]}`}>
                 {STATUS_LABELS[key]}
                 <span className="ml-1 text-xs opacity-70">
                   {key === 'all'
@@ -238,7 +298,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           {/* Right: new project */}
           <div className="ml-auto flex items-center gap-3 flex-shrink-0">
             {isAdmin && (
-              <button onClick={() => router.push('/admin')}
+              <button onClick={() => setShowCreateProj(true)}
                 className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white
                            text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-150">
                 <span className="text-base leading-none">+</span>
@@ -554,6 +614,118 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Create Project Modal ══════════════════════════════════ */}
+      {showCreateProj && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">新建项目</h3>
+              <button onClick={() => { setShowCreateProj(false); setNewProjMsg('') }}
+                className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">项目名称 <span className="text-red-500">*</span></label>
+                  <input value={newProjName} onChange={e => setNewProjName(e.target.value)}
+                    placeholder="请输入项目名称" className="input-field" autoFocus />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">委托方 <span className="text-red-500">*</span></label>
+                  <input value={newProjClient} onChange={e => setNewProjClient(e.target.value)}
+                    placeholder="委托方名称" className="input-field" />
+                </div>
+              </div>
+
+              {/* Matter type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">事务类型</label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setNewProjMatterType('')}
+                    className={`px-3 py-1.5 text-sm rounded-full border transition-colors
+                      ${newProjMatterType === '' ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    不指定
+                  </button>
+                  {MATTER_TYPES.map(t => (
+                    <button key={t} type="button" onClick={() => setNewProjMatterType(t)}
+                      className={`px-3 py-1.5 text-sm rounded-full border transition-colors
+                        ${newProjMatterType === t ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">初始状态</label>
+                  <select value={newProjStatus} onChange={e => setNewProjStatus(e.target.value)} className="input-field">
+                    <option value="active">进行中</option>
+                    <option value="cancelled">未签约</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">签约方</label>
+                  <select value={newProjAgreement} onChange={e => setNewProjAgreement(e.target.value)} className="input-field">
+                    <option value="Deheng Beijing">Deheng Beijing</option>
+                    <option value="Deheng Seoul">Deheng Seoul</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">服务费币种</label>
+                  <select value={newProjCurrency} onChange={e => setNewProjCurrency(e.target.value)} className="input-field">
+                    <option value="CNY">CNY（人民币）</option>
+                    <option value="KRW">KRW（韩元）</option>
+                    <option value="USD">USD（美元）</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">服务费金额</label>
+                  <input type="number" min="0" step="0.01" value={newProjAmount}
+                    onChange={e => setNewProjAmount(e.target.value)} placeholder="可选" className="input-field" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">协作方</label>
+                <div className="space-y-2">
+                  {newProjCollab.map((p, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input value={p} onChange={e => {
+                        const next = [...newProjCollab]; next[i] = e.target.value; setNewProjCollab(next)
+                      }} placeholder={`协作方 ${i + 1}`} className="input-field flex-1" />
+                      {newProjCollab.length > 1 && (
+                        <button onClick={() => setNewProjCollab(newProjCollab.filter((_, j) => j !== i))}
+                          className="text-gray-400 hover:text-red-500 text-lg px-1">×</button>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={() => setNewProjCollab([...newProjCollab, ''])}
+                    className="text-sm text-teal-600 hover:text-teal-800 font-medium">+ 添加协作方</button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
+                <textarea value={newProjDesc} onChange={e => setNewProjDesc(e.target.value)}
+                  placeholder="简要描述（可选）" rows={2} className="input-field resize-none" />
+              </div>
+
+              {newProjMsg && <p className="text-sm">{newProjMsg}</p>}
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button onClick={() => { setShowCreateProj(false); setNewProjMsg('') }}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+              <button onClick={createProject} disabled={newProjSaving}
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
+                {newProjSaving ? '创建中…' : '创建项目'}
+              </button>
             </div>
           </div>
         </div>

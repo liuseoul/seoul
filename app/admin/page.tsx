@@ -19,21 +19,14 @@ export default async function AdminPage() {
 
   if (profile?.role !== 'admin') redirect('/projects')
 
-  const [{ data: projects }, { data: members }] = await Promise.all([
-    supabase
-      .from('projects')
-      .select('id, name, client, status, created_at')
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('profiles')
-      .select('id, name, email, role, created_at')
-      .order('created_at', { ascending: false }),
-  ])
+  const { data: members } = await supabase
+    .from('profiles')
+    .select('id, name, email, role, created_at')
+    .order('created_at', { ascending: false })
 
   return (
     <AdminDashboard
       profile={profile}
-      projects={projects || []}
       members={members || []}
     />
   )

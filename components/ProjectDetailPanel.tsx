@@ -9,15 +9,19 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: '未签约',
 }
 
+const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询']
+
 type EditForm = {
   name: string; client: string; description: string
   agreement_party: string; service_fee_currency: string
-  service_fee_amount: string; collaboration_parties: string; status: string
+  service_fee_amount: string; collaboration_parties: string
+  status: string; matter_type: string
 }
 
 const EMPTY_FORM: EditForm = {
   name: '', client: '', description: '', agreement_party: '',
-  service_fee_currency: '', service_fee_amount: '', collaboration_parties: '', status: 'active',
+  service_fee_currency: '', service_fee_amount: '', collaboration_parties: '',
+  status: 'active', matter_type: '',
 }
 
 const STATUS_EDIT = [
@@ -250,6 +254,7 @@ export default function ProjectDetailPanel({
       service_fee_amount:    project.service_fee_amount != null ? String(project.service_fee_amount) : '',
       collaboration_parties: (project.collaboration_parties as string[] | null)?.join('，') || '',
       status:                project.status || 'active',
+      matter_type:           project.matter_type || '',
     })
     setShowEdit(true)
   }
@@ -272,6 +277,7 @@ export default function ProjectDetailPanel({
         ? editForm.collaboration_parties.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean)
         : [],
       status:                editForm.status,
+      matter_type:           editForm.matter_type || null,
     }).eq('id', project.id)
     setEditSaving(false)
     if (error) { alert('保存失败：' + error.message); return }
@@ -324,6 +330,11 @@ export default function ProjectDetailPanel({
         <span className={`status-tag st-${project.status}`}>
           {STATUS_LABELS[project.status] || project.status}
         </span>
+        {project.matter_type && (
+          <span className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">
+            {project.matter_type}
+          </span>
+        )}
         {isAdmin && (
           <select
             defaultValue={project.status}
@@ -650,6 +661,23 @@ export default function ProjectDetailPanel({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">委托方</label>
                 <input type="text" value={editForm.client} onChange={e => setEditField('client', e.target.value)} className="input-field" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">事务类型</label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setEditField('matter_type', '')}
+                    className={`px-3 py-1 text-sm rounded-full border transition-colors
+                      ${editForm.matter_type === '' ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    不指定
+                  </button>
+                  {MATTER_TYPES.map(t => (
+                    <button key={t} type="button" onClick={() => setEditField('matter_type', t)}
+                      className={`px-3 py-1 text-sm rounded-full border transition-colors
+                        ${editForm.matter_type === t ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">协议方</label>
