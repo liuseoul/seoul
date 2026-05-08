@@ -608,39 +608,43 @@ export default function Sidebar({ profile }: SidebarProps) {
     return (
       <button onClick={() => openDetailRem(r)}
         className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-all ${cls}`}>
-        <span className={`text-xs font-bold mt-0.5 flex-shrink-0 min-w-9
-          ${variant === 'upcoming' && isToday ? 'text-amber-600' : variant === 'upcoming' ? 'text-teal-600' : 'text-gray-400'}`}>
-          {dateLabel}
-        </span>
+
+        {/* Left: date on top, time below */}
+        <div className="flex flex-col items-start flex-shrink-0 min-w-9 mt-0.5">
+          <span className={`text-xs font-bold leading-tight
+            ${variant === 'upcoming' && isToday ? 'text-amber-600' : variant === 'upcoming' ? 'text-teal-600' : 'text-gray-400'}`}>
+            {dateLabel}
+          </span>
+          {variant === 'upcoming' && r.start_time && (
+            <span className="text-[10px] text-gray-400 leading-tight mt-0.5">
+              {fmtTime(r.start_time)}{r.end_time ? `–${fmtTime(r.end_time)}` : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Right: content + type badge + assignees all inline */}
         <div className="min-w-0 flex-1">
-          <span className={`text-sm leading-snug line-clamp-2 block
+          <span className={`text-sm leading-snug
             ${variant === 'deleted' ? 'line-through text-gray-400'
             : variant === 'past'    ? 'line-through text-gray-500'
             : isToday               ? 'text-amber-800 font-medium'
             : 'text-gray-800'}`}>
             {r.content}
           </span>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            {variant === 'upcoming' && r.type && r.type !== 'others' && (
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TYPE_COLORS[r.type] || TYPE_COLORS.others}`}>
-                {TYPE_LABELS[r.type] || r.type}
-              </span>
-            )}
-            {variant === 'upcoming' && (r.assigned_to_name || r.assigned_to_name_2) && (
-              <span className="text-[10px] text-indigo-500 font-medium">
-                @{[r.assigned_to_name, r.assigned_to_name_2].filter(Boolean).join(' @')}
-              </span>
-            )}
-            {variant === 'upcoming' && r.start_time && (
-              <span className="text-[10px] text-gray-400">
-                {fmtTime(r.start_time)}{r.end_time ? `–${fmtTime(r.end_time)}` : ''}
-              </span>
-            )}
-            {variant === 'past'    && <span className="text-[10px] text-gray-400">已过期</span>}
-            {variant === 'deleted' && r.deleted_by_name && (
-              <span className="text-[10px] text-red-400">已删除 · {r.deleted_by_name}</span>
-            )}
-          </div>
+          {variant === 'upcoming' && r.type && r.type !== 'others' && (
+            <span className={`ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded align-middle ${TYPE_COLORS[r.type] || TYPE_COLORS.others}`}>
+              {TYPE_LABELS[r.type] || r.type}
+            </span>
+          )}
+          {variant === 'upcoming' && (r.assigned_to_name || r.assigned_to_name_2) && (
+            <span className="ml-1.5 text-[10px] text-indigo-500 font-medium align-middle">
+              @{[r.assigned_to_name, r.assigned_to_name_2].filter(Boolean).join(' @')}
+            </span>
+          )}
+          {variant === 'past' && <span className="ml-1.5 text-[10px] text-gray-400 align-middle">已过期</span>}
+          {variant === 'deleted' && r.deleted_by_name && (
+            <span className="ml-1.5 text-[10px] text-red-400 align-middle">已删除 · {r.deleted_by_name}</span>
+          )}
         </div>
       </button>
     )
