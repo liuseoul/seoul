@@ -770,26 +770,27 @@ export default function Sidebar({ profile }: SidebarProps) {
         </div>
 
         {/* User info & logout */}
-        <div className="px-3 py-4 border-t border-slate-300 flex-shrink-0 bg-slate-200">
-          <div className="flex items-center justify-between px-3 py-2 mb-1">
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-900 truncate">{profile?.name || 'User'}</div>
-              <div className="text-xs text-gray-400 mt-0.5">{isAdmin ? 'Administrator' : 'Member'}</div>
-            </div>
+        <div className="px-3 py-3 border-t border-slate-300 flex-shrink-0 bg-slate-200">
+          <div className="flex items-center gap-2 px-2 py-1.5">
             {isAdmin && (
               <button onClick={() => router.push('/admin')}
-                className={`ml-2 flex-shrink-0 px-3 py-1 text-xs font-medium rounded border transition-colors
+                className={`flex-shrink-0 px-3 py-1 text-xs font-medium rounded border transition-colors
                   ${pathname === '/admin'
                     ? 'bg-teal-700 text-white border-teal-700'
                     : 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'}`}>
                 管理
               </button>
             )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-gray-900 truncate">{profile?.name || 'User'}</div>
+              <div className="text-xs text-gray-400">{isAdmin ? 'Administrator' : 'Member'}</div>
+            </div>
+            <button onClick={handleLogout}
+              className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border
+                         border-gray-400 text-gray-600 hover:bg-gray-300 transition-colors">
+              Sign Out
+            </button>
           </div>
-          <button onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150">
-            <span>🚪</span><span>Sign Out</span>
-          </button>
         </div>
       </div>
 
