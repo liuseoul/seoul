@@ -258,30 +258,29 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
-        <div className="flex items-center gap-1.5 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0 overflow-x-auto">
-          {/* Title */}
-          <h1 className="text-base font-semibold text-gray-900 mr-2 flex-shrink-0">项目概览</h1>
-          <span className="w-px h-5 bg-gray-200 flex-shrink-0 mx-1" />
+        <div className="flex items-center gap-1.5 px-5 py-3 bg-teal-50 border-b border-teal-100 flex-shrink-0 overflow-x-auto">
+          {/* Title + total count */}
+          <h1 className="text-base font-semibold text-gray-900 flex-shrink-0 mr-1">项目概览</h1>
+          <span className="text-base font-bold text-teal-600 flex-shrink-0 mr-1">{projects.length}</span>
+          <span className="w-px h-5 bg-teal-200 flex-shrink-0 mx-1" />
 
-          {/* Status filter buttons with dividers */}
-          {STATUS_ORDER.map((key, i) => (
+          {/* Status filter buttons with dividers — skip 'all' */}
+          {STATUS_ORDER.filter(k => k !== 'all').map((key, i) => (
             <div key={key} className="flex items-center gap-1.5">
-              {i > 0 && <span className="w-px h-4 bg-gray-200 flex-shrink-0" />}
+              {i > 0 && <span className="w-px h-4 bg-teal-200 flex-shrink-0" />}
               <button onClick={() => setFilter(key)}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
                   ${filter === key ? STATUS_PILL_ON[key] : STATUS_PILL_OFF[key]}`}>
                 {STATUS_LABELS[key]}
                 <span className="ml-1 text-xs opacity-70">
-                  {key === 'all'
-                    ? projects.length
-                    : projects.filter((p: any) => p.status === key).length}
+                  {projects.filter((p: any) => p.status === key).length}
                 </span>
               </button>
             </div>
           ))}
 
           {/* Divider before utility buttons */}
-          <span className="w-px h-5 bg-gray-200 flex-shrink-0 mx-1" />
+          <span className="w-px h-5 bg-teal-200 flex-shrink-0 mx-1" />
 
           {/* Utility buttons */}
           <button onClick={() => { setShowStats(true); setStatsResult(null) }}

@@ -689,7 +689,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
         {/* Logo — clickable, goes to main page */}
         <button onClick={() => router.push('/projects')}
-          className="px-5 py-5 border-b border-gray-200 flex-shrink-0 w-full text-left hover:bg-gray-50 transition-colors">
+          className="px-5 py-5 border-b border-teal-100 flex-shrink-0 w-full text-left bg-teal-50 hover:bg-teal-100 transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0">D</div>
             <div className="text-sm font-semibold text-gray-900 leading-tight">Deheng Seoul</div>
@@ -717,7 +717,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
         {/* 日程安排 */}
         <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
+          <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0 bg-teal-50 border-b border-teal-100">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">日程安排</span>
             <div className="flex items-center gap-1">
               <button onClick={() => setShowCalendarAll(true)}
@@ -770,7 +770,7 @@ export default function Sidebar({ profile }: SidebarProps) {
         </div>
 
         {/* User info & logout */}
-        <div className="px-3 py-4 border-t border-gray-200 flex-shrink-0">
+        <div className="px-3 py-4 border-t border-teal-100 flex-shrink-0 bg-teal-50">
           <div className="flex items-center justify-between px-3 py-2 mb-1">
             <div className="min-w-0">
               <div className="text-sm font-medium text-gray-900 truncate">{profile?.name || 'User'}</div>
