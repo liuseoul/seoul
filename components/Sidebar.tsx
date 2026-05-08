@@ -601,10 +601,10 @@ export default function Sidebar({ profile }: SidebarProps) {
     const dateLabel = remDateLabel(r)
     const rowBg     = variant === 'upcoming' ? (isToday ? '' : ROW_BG[index % 2]) : ''
     const cls =
-      variant === 'upcoming' && isToday ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
-      : variant === 'upcoming'          ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
-      : variant === 'past'              ? 'bg-gray-50 border-gray-100 opacity-60 hover:opacity-80'
-      : 'bg-red-50/40 border-red-100 opacity-50 hover:opacity-70'
+      variant === 'upcoming' && isToday ? 'bg-amber-50 border-amber-400 hover:bg-amber-100'
+      : variant === 'upcoming'          ? `${rowBg} border-gray-400 hover:border-teal-500 hover:bg-teal-50/40`
+      : variant === 'past'              ? 'bg-gray-50 border-gray-300 opacity-60 hover:opacity-80'
+      : 'bg-red-50/40 border-red-300 opacity-50 hover:opacity-70'
     return (
       <button onClick={() => openDetailRem(r)}
         className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border transition-all ${cls}`}>

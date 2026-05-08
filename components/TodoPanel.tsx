@@ -128,10 +128,10 @@ function TodoRow({
   return (
     <div className={`flex items-start gap-2 px-2 py-2 rounded-lg border transition-colors
       ${isDue
-        ? 'bg-yellow-50 border-yellow-300 hover:bg-yellow-100'
+        ? 'bg-yellow-50 border-yellow-400 hover:bg-yellow-100'
         : isPending
-        ? `${rowBg} border-gray-200 hover:border-teal-300 hover:bg-teal-50/40`
-        : 'border-transparent hover:bg-gray-100'}`}
+        ? `${rowBg} border-gray-400 hover:border-teal-500 hover:bg-teal-50/40`
+        : 'border-gray-300 hover:bg-gray-100'}`}
     >
       {/* Circle / tick / deleted marker */}
       {!todo.deleted && !done && (
