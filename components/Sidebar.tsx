@@ -722,7 +722,10 @@ export default function Sidebar({ profile }: SidebarProps) {
         {/* 日程安排 */}
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 bg-violet-100 border-b border-violet-200">
-            <span className="text-sm font-semibold text-gray-700">日程安排</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-gray-700">日程安排</span>
+              <span className="text-base font-bold text-teal-600">{upcoming.length}</span>
+            </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setShowCalendarAll(true)}
                 className="text-xs text-gray-500 hover:text-teal-600 px-2 py-0.5 rounded border border-gray-300 hover:border-teal-400 transition-colors">

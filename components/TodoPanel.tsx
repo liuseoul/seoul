@@ -455,7 +455,10 @@ export default function TodoPanel({ profile }: { profile: any }) {
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-emerald-200 flex-shrink-0 bg-emerald-100">
-        <h2 className="text-sm font-semibold text-gray-800">工作安排</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-sm font-semibold text-gray-800">工作安排</h2>
+          <span className="text-base font-bold text-teal-600">{uncompleted.length}</span>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowAllPending(true)}
             className="text-xs text-gray-500 hover:text-teal-600 px-2 py-1 rounded border border-gray-300 hover:border-teal-400 transition-colors">
