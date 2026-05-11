@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#5eead4"/>
+      <stop offset="100%" stop-color="#134e4a"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Inner frame line — decorative -->
+  <rect x="14" y="14" width="484" height="484" rx="84"
+        fill="none" stroke="white" stroke-width="2" opacity="0.18"/>
+
+  <!-- Top-left gloss highlight -->
+  <ellipse cx="168" cy="136" rx="190" ry="140" fill="url(#shine)"/>
+
+  <!-- Letter D
+       Outer silhouette: vertical stem + right-side curve
+       Inner counter  : subtracted with evenodd rule
+  -->
+  <path fill="white" fill-rule="evenodd" d="
+    M 110,76
+    L 110,436
+    L 208,436
+    C 450,436 450,76 208,76
+    Z
+
+    M 188,148
+    L 208,148
+    C 372,148 372,364 208,364
+    L 188,364
+    Z
+  "/>
+
+  <!-- Thin accent line at stem top — serif-style touch -->
+  <rect x="96" y="72" width="118" height="8" rx="4" fill="white" opacity="0.55"/>
+  <!-- Thin accent line at stem bottom -->
+  <rect x="96" y="432" width="118" height="8" rx="4" fill="white" opacity="0.55"/>
+</svg>

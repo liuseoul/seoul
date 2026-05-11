@@ -1,0 +1,26 @@
+{
+  "name": "Deheng Seoul",
+  "short_name": "Deheng",
+  "description": "Deheng Seoul team project management platform",
+  "start_url": "/projects",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0fdfa",
+  "theme_color": "#0d9488",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
