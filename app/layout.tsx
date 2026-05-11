@@ -9,7 +9,6 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Deheng Seoul | Project Management',
   description: 'Deheng Seoul team project management platform',
-  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
