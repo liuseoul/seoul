@@ -259,8 +259,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header + filter bar — single unified row */}
         <div className="flex items-center gap-1.5 px-4 py-3 bg-amber-100 border-b border-amber-200 flex-shrink-0 overflow-x-auto">
-          {/* Title + total count */}
-          <h1 className="text-sm font-semibold text-gray-900 flex-shrink-0 mr-1">项目概览</h1>
+          {/* Title + total count — click to reset filter to all */}
+          <button onClick={() => setFilter('all')}
+            className="text-sm font-semibold text-gray-900 flex-shrink-0 mr-1 hover:text-teal-700 transition-colors">
+            项目概览
+          </button>
           <span className="text-base font-bold text-teal-600 flex-shrink-0 mr-1">{projects.length}</span>
           <span className="w-px h-5 bg-amber-300 flex-shrink-0 mx-1" />
 
@@ -319,7 +322,10 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           )}
 
           {filtered.map((project: any, index: number) => {
-            const isCancelled = project.status === 'delayed'
+            const isCancelled  = project.status === 'delayed'
+            const isCompleted  = project.status === 'completed'
+            const isDimmed     = isCancelled || isCompleted
+            const isStruckThrough = isCancelled || isCompleted
             const recordCount = (project.work_records || []).filter((r: any) => !r.deleted).length
             const hours       = calcHours(project.time_logs || [])
             const isSelected  = selectedId === project.id
@@ -329,13 +335,13 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
             return (
               <div
                 key={project.id}
-                className={`project-row ${isSelected ? 'selected' : rowBg} ${isCancelled ? 'opacity-50' : ''}`}
+                className={`project-row ${isSelected ? 'selected' : rowBg} ${isDimmed ? 'opacity-50' : ''}`}
                 onClick={() => setSelectedId(isSelected ? null : project.id)}
               >
                 {/* Left: name + revise button + client */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`font-bold text-gray-900 truncate ${isCancelled ? 'line-through' : ''}`}>
+                    <span className={`font-bold text-gray-900 truncate ${isStruckThrough ? 'line-through' : ''}`}>
                       {project.name}
                     </span>
                     {isAdmin && (
@@ -350,7 +356,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                     )}
                   </div>
                   <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-3 truncate">
-                    <span className={isCancelled ? 'line-through' : ''}>
+                    <span className={isStruckThrough ? 'line-through' : ''}>
                       委托方：{project.client || '—'}
                     </span>
                   </div>
