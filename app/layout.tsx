@@ -27,6 +27,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
+      <head>
+        {/* Manifest served by /app/manifest.webmanifest/route.ts */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+      </head>
       <body>
         {children}
         <PwaRegister />

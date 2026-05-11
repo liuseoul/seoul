@@ -1,9 +1,7 @@
-import type { MetadataRoute } from 'next'
-
 export const runtime = 'edge'
 
-export default function manifest(): MetadataRoute.Manifest {
-  return {
+export async function GET() {
+  const manifest = {
     name: 'Deheng Seoul',
     short_name: 'Deheng',
     description: 'Deheng Seoul team project management platform',
@@ -13,6 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'any',
     background_color: '#f0fdfa',
     theme_color: '#0d9488',
+    lang: 'zh-CN',
     icons: [
       {
         src: '/icons/icon-192.png',
@@ -34,4 +33,11 @@ export default function manifest(): MetadataRoute.Manifest {
       },
     ],
   }
+
+  return new Response(JSON.stringify(manifest), {
+    headers: {
+      'Content-Type': 'application/manifest+json; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  })
 }
