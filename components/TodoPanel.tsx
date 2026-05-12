@@ -207,13 +207,15 @@ function TodoRow({
                 {todo.assignee_abbrev_2}
               </span>
             )}
-            <span className="text-[10px] text-gray-400 flex-shrink-0">
-              {todo.deleted && todo.deleted_by_name
-                ? `已删除 · ${todo.deleted_by_name}`
-                : done && todo.completed_by_name
-                ? `✓ ${todo.completed_by_name}`
-                : fmtDate(todo.created_at)}
-            </span>
+            {(todo.deleted || done) && (
+              <span className="text-[10px] text-gray-400 flex-shrink-0">
+                {todo.deleted && todo.deleted_by_name
+                  ? `已删除 · ${todo.deleted_by_name}`
+                  : done && todo.completed_by_name
+                  ? `✓ ${todo.completed_by_name}`
+                  : null}
+              </span>
+            )}
             {!todo.deleted && !done && todo.due_date && (
               <span className="text-[10px] text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded flex-shrink-0">
                 截止 {fmtDate(todo.due_date + 'T00:00:00')}
@@ -536,7 +538,6 @@ export default function TodoPanel({ profile }: { profile: any }) {
               ) : (
                 uncompleted.map((todo, idx) => (
                   <div key={todo.id} className={`flex items-baseline gap-1.5 px-2 py-2 rounded-lg border border-gray-200 ${PENDING_BG[idx % 2]}`}>
-                    <span className="text-[10px] text-gray-400 flex-shrink-0">{fmtDate(todo.created_at)}</span>
                     <span className="text-sm text-gray-800 leading-snug flex-1">{todo.content}</span>
                     {todo.assignee_abbrev && (
                       <span className="text-[10px] font-bold px-1 rounded text-teal-600 bg-teal-50 flex-shrink-0">{todo.assignee_abbrev}</span>
