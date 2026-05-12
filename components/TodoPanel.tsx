@@ -586,6 +586,12 @@ export default function TodoPanel({ profile }: { profile: any }) {
                 </div>
                 <MemberPicker label="负责人1：" value={singleAssignee1} members={members} onChange={setSingleAssignee1} />
                 <MemberPicker label="负责人2：" value={singleAssignee2} members={members} onChange={setSingleAssignee2} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">截止日期 <span className="text-gray-400 text-xs font-normal">（选填）</span></label>
+                  <input type="date" value={singleDueDate} onChange={e => setSingleDueDate(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2
+                               focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />
+                </div>
                 <div className="flex gap-3 pt-1">
                   <button onClick={() => setShowAdd(false)}
                     className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
