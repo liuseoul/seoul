@@ -132,7 +132,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       name: newProjName.trim(), client: newProjClient.trim(),
       description: newProjDesc.trim() || null,
       matter_type: newProjMatterType || null,
-      status: newProjStatus, agreement_party: newProjAgreement,
+      status: newProjStatus, agreement_party: newProjAgreement.trim() || null,
       service_fee_currency: newProjCurrency,
       service_fee_amount: newProjAmount ? parseFloat(newProjAmount) : null,
       collaboration_parties: parties, created_by: user!.id,
