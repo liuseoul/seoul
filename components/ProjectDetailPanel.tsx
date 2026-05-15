@@ -9,7 +9,7 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: '未签约',
 }
 
-const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询']
+const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询', '常年法律顾问']
 
 type EditForm = {
   name: string; client: string; description: string

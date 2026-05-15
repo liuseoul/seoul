@@ -34,7 +34,7 @@ const STATUS_PILL_OFF: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-500 hover:bg-gray-200',
 }
 
-const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询']
+const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询', '常年法律顾问']
 
 function calcHours(logs: Array<{ started_at: string; finished_at: string | null; deleted?: boolean }>) {
   return logs
@@ -114,7 +114,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const [newProjMatterType,setNewProjMatterType]= useState('')
   const [newProjDesc,      setNewProjDesc]      = useState('')
   const [newProjStatus,    setNewProjStatus]    = useState('active')
-  const [newProjAgreement, setNewProjAgreement] = useState('Deheng Beijing')
+  const [newProjAgreement, setNewProjAgreement] = useState('')
   const [newProjCurrency,  setNewProjCurrency]  = useState('CNY')
   const [newProjAmount,    setNewProjAmount]    = useState('')
   const [newProjCollab,    setNewProjCollab]    = useState([''])
@@ -142,7 +142,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
     } else {
       setNewProjMsg('✅ 项目已创建')
       setNewProjName(''); setNewProjClient(''); setNewProjDesc(''); setNewProjMatterType('')
-      setNewProjStatus('active'); setNewProjAgreement('Deheng Beijing')
+      setNewProjStatus('active'); setNewProjAgreement('')
       setNewProjCurrency('CNY'); setNewProjAmount(''); setNewProjCollab([''])
       setTimeout(() => { setShowCreateProj(false); setNewProjMsg(''); router.refresh() }, 800)
     }
@@ -675,10 +675,8 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">签约方</label>
-                  <select value={newProjAgreement} onChange={e => setNewProjAgreement(e.target.value)} className="input-field">
-                    <option value="Deheng Beijing">Deheng Beijing</option>
-                    <option value="Deheng Seoul">Deheng Seoul</option>
-                  </select>
+                  <input type="text" value={newProjAgreement} onChange={e => setNewProjAgreement(e.target.value)}
+                    placeholder="由管理员填写" className="input-field" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">服务费币种</label>
