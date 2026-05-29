@@ -650,6 +650,52 @@ export default function Sidebar({ profile }: SidebarProps) {
     )
   }
 
+  // ── Time picker: hour select + minute select (5-min steps) ──
+  function TimePicker({ value, onChange, label }: {
+    value: string; onChange: (v: string) => void; label: string
+  }) {
+    const MINUTES = ['00','05','10','15','20','25','30','35','40','45','50','55']
+    const hours   = value ? value.split(':')[0] : ''
+    const mins    = value ? value.split(':')[1] ?? '' : ''
+
+    function set(h: string, m: string) {
+      if (!h && !m) { onChange(''); return }
+      onChange(`${h.padStart(2,'0')}:${m || '00'}`)
+    }
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <div className="flex gap-1.5 items-center">
+          {/* Hour */}
+          <select value={hours} onChange={e => set(e.target.value, mins)}
+            className="flex-1 px-2 py-2 text-sm border border-gray-300 rounded-lg
+                       focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
+            <option value="">--</option>
+            {Array.from({length:24},(_,i)=>String(i).padStart(2,'0')).map(h=>(
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
+          <span className="text-gray-400 font-medium text-sm">:</span>
+          {/* Minute — 5-min steps only */}
+          <select value={mins} onChange={e => set(hours, e.target.value)}
+            className="flex-1 px-2 py-2 text-sm border border-gray-300 rounded-lg
+                       focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
+            <option value="">--</option>
+            {MINUTES.map(m=>(
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+          {/* Clear */}
+          {value && (
+            <button type="button" onClick={() => onChange('')}
+              className="text-gray-300 hover:text-gray-500 text-lg leading-none px-1">×</button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // ── Reusable form fields for add/edit modals ──────────────
   function DateTimeFields({
     startDate, endDate, startTime, endTime,
@@ -674,14 +720,8 @@ export default function Sidebar({ profile }: SidebarProps) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
-            <input type="time" value={startTime} onChange={e => onStartTime(e.target.value)} className="input-field" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
-            <input type="time" value={endTime} onChange={e => onEndTime(e.target.value)} className="input-field" />
-          </div>
+          <TimePicker label="开始时间" value={startTime} onChange={onStartTime} />
+          <TimePicker label="结束时间" value={endTime}   onChange={onEndTime}   />
         </div>
       </>
     )
