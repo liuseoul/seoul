@@ -115,6 +115,39 @@ export default function ProjectDetailPanel({
   const [timeContent,  setTimeContent]  = useState('')
   const [savingTime,   setSavingTime]   = useState(false)
 
+  // ── Edit Time Log modal ───────────────────────────────────
+  const [editingLog,      setEditingLog]      = useState<any | null>(null)
+  const [editLogDate,     setEditLogDate]     = useState('')
+  const [editLogStart,    setEditLogStart]    = useState('')
+  const [editLogEnd,      setEditLogEnd]      = useState('')
+  const [editLogContent,  setEditLogContent]  = useState('')
+  const [savingEditLog,   setSavingEditLog]   = useState(false)
+
+  function openEditLog(l: any) {
+    const start = new Date(l.started_at)
+    const end   = l.finished_at ? new Date(l.finished_at) : null
+    setEditLogDate(start.toLocaleDateString('en-CA'))           // YYYY-MM-DD
+    setEditLogStart(start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))
+    setEditLogEnd(end ? end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
+    setEditLogContent(l.description || '')
+    setEditingLog(l)
+  }
+
+  async function saveEditLog() {
+    if (!editLogDate || !editLogStart) { alert('请填写日期和开始时间'); return }
+    if (editLogEnd && editLogEnd <= editLogStart) { alert('结束时间必须晚于开始时间'); return }
+    setSavingEditLog(true)
+    const { error } = await supabase.from('time_logs').update({
+      started_at:  localDatetime(editLogDate, editLogStart),
+      finished_at: editLogEnd ? localDatetime(editLogDate, editLogEnd) : null,
+      description: editLogContent.trim() || null,
+    }).eq('id', editingLog.id)
+    setSavingEditLog(false)
+    if (error) { alert('保存失败：' + error.message); return }
+    setEditingLog(null)
+    loadTimeLogs()
+  }
+
   async function loadRecords() {
     const { data, error } = await supabase
       .from('work_records')
@@ -494,6 +527,11 @@ export default function ProjectDetailPanel({
                     <p className={`text-sm text-gray-600 mt-1 ${l.deleted ? 'line-through' : ''}`}>{l.description}</p>
                   )}
                   <div className="flex gap-2 mt-1.5">
+                    {canSoftDelete && (
+                      <button onClick={() => openEditLog(l)} className="text-xs text-teal-500 hover:text-teal-700">
+                        修改
+                      </button>
+                    )}
                     {canSoftDelete && (
                       <button onClick={() => softDeleteTimeLog(l.id)} className="text-xs text-amber-500 hover:text-amber-700">
                         删除
@@ -906,6 +944,60 @@ export default function ProjectDetailPanel({
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
               >
                 {savingTime ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Time Log Modal ── */}
+      {editingLog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-gray-900">修改工时记录</h3>
+              <button onClick={() => setEditingLog(null)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                <input type="date" value={editLogDate} onChange={e => setEditLogDate(e.target.value)}
+                  className="input-field" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">开始时间</label>
+                  <input type="time" value={editLogStart} onChange={e => setEditLogStart(e.target.value)}
+                    className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
+                  <input type="time" value={editLogEnd} onChange={e => setEditLogEnd(e.target.value)}
+                    className="input-field" />
+                </div>
+              </div>
+              <div className="bg-teal-50 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-sm text-gray-600">合计时长</span>
+                <span className="text-sm font-semibold text-teal-700">{calcTotal(editLogStart, editLogEnd)}</span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">工作内容</label>
+                <textarea value={editLogContent} onChange={e => setEditLogContent(e.target.value)}
+                  rows={3} className="input-field resize-none" />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setEditingLog(null)}
+                className="flex-1 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                取消
+              </button>
+              <button onClick={saveEditLog} disabled={savingEditLog}
+                className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
+                           rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
+                {savingEditLog ? '保存中…' : '保存'}
               </button>
             </div>
           </div>
