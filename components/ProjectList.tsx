@@ -338,7 +338,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                 className={`project-row ${isSelected ? 'selected' : rowBg} ${isDimmed ? 'opacity-50' : ''}`}
                 onClick={() => setSelectedId(isSelected ? null : project.id)}
               >
-                {/* Left: name + revise button + client */}
+                {/* Left: name + revise button */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`font-bold text-gray-900 truncate ${isStruckThrough ? 'line-through' : ''}`}>
@@ -354,11 +354,6 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                         修改
                       </button>
                     )}
-                  </div>
-                  <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-3 truncate">
-                    <span className={isStruckThrough ? 'line-through' : ''}>
-                      委托方：{project.client || '—'}
-                    </span>
                   </div>
                 </div>
 
