@@ -333,7 +333,6 @@ export default function ProjectDetailPanel({
       <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-gray-900 text-sm truncate">{project.name}</h2>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">委托方：{project.client || '—'}</p>
           <div className="flex flex-wrap gap-2 mt-1.5">
             {project.agreement_party && (
               <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
