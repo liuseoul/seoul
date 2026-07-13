@@ -75,11 +75,24 @@ type EditForm = {
   service_fee_amount: string
   collaboration_parties: string   // comma-separated
   status: string
+  industry: string
 }
 
 const EMPTY_FORM: EditForm = {
   name: '', client: '', description: '', agreement_party: '',
   service_fee_currency: '', service_fee_amount: '', collaboration_parties: '', status: 'active',
+  industry: '',
+}
+
+function downloadCSV(filename: string, rows: string[][]) {
+  const csv = rows
+    .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function ProjectList({ projects, profile }: { projects: any[]; profile: any }) {
@@ -118,6 +131,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   const [newProjCurrency,  setNewProjCurrency]  = useState('CNY')
   const [newProjAmount,    setNewProjAmount]    = useState('')
   const [newProjCollab,    setNewProjCollab]    = useState([''])
+  const [newProjIndustry,  setNewProjIndustry]  = useState('')
   const [newProjSaving,    setNewProjSaving]    = useState(false)
   const [newProjMsg,       setNewProjMsg]       = useState('')
 
@@ -136,6 +150,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       service_fee_currency: newProjCurrency,
       service_fee_amount: newProjAmount ? parseFloat(newProjAmount) : null,
       collaboration_parties: parties, created_by: user!.id,
+      industry: newProjIndustry.trim() || null,
     })
     if (error) {
       setNewProjMsg(`❌ 创建失败：${error.message}`)
@@ -143,7 +158,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       setNewProjMsg('✅ 项目已创建')
       setNewProjName(''); setNewProjClient(''); setNewProjDesc(''); setNewProjMatterType('')
       setNewProjStatus('active'); setNewProjAgreement('')
-      setNewProjCurrency('CNY'); setNewProjAmount(''); setNewProjCollab([''])
+      setNewProjCurrency('CNY'); setNewProjAmount(''); setNewProjCollab(['']); setNewProjIndustry('')
       setTimeout(() => { setShowCreateProj(false); setNewProjMsg(''); router.refresh() }, 800)
     }
     setNewProjSaving(false)
@@ -161,6 +176,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       service_fee_amount:    project.service_fee_amount != null ? String(project.service_fee_amount) : '',
       collaboration_parties: (project.collaboration_parties as string[] | null)?.join('，') || '',
       status:                project.status || 'active',
+      industry:              project.industry || '',
     })
   }
 
@@ -198,6 +214,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         ? form.collaboration_parties.split(/[,，]/).map(s => s.trim()).filter(Boolean)
         : [],
       status:                form.status,
+      industry:              form.industry.trim() || null,
     }).eq('id', editProject.id)
     setSaving(false)
     if (error) { alert('保存失败：' + error.message); return }
@@ -433,6 +450,18 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                 />
               </div>
 
+              {/* Industry */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">项目所属行业</label>
+                <input
+                  type="text"
+                  value={form.industry}
+                  onChange={e => setField('industry', e.target.value)}
+                  placeholder="如：金融、房地产、科技（可选）"
+                  className="input-field"
+                />
+              </div>
+
               {/* Agreement party */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">协议方</label>
@@ -595,23 +624,55 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                 统计
               </button>
               {statsResult && (
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">新增项目数</span>
-                    <span className="text-2xl font-bold text-gray-900">{statsResult.total}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-teal-50">
-                    <div>
-                      <span className="text-sm text-gray-700">已签协议项目数</span>
-                      <p className="text-[10px] text-gray-400 mt-0.5">新增 − 未签约 − 已取消</p>
+                <>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">新增项目数</span>
+                      <span className="text-2xl font-bold text-gray-900">{statsResult.total}</span>
                     </div>
-                    <span className="text-2xl font-bold text-teal-600">{statsResult.assigned}</span>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-teal-50">
+                      <div>
+                        <span className="text-sm text-gray-700">已签协议项目数</span>
+                        <p className="text-[10px] text-gray-400 mt-0.5">新增 − 未签约 − 已取消</p>
+                      </div>
+                      <span className="text-2xl font-bold text-teal-600">{statsResult.assigned}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <span className="text-sm text-gray-600">已完成项目数</span>
+                      <span className="text-2xl font-bold text-indigo-600">{statsResult.finished}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-gray-600">已完成项目数</span>
-                    <span className="text-2xl font-bold text-indigo-600">{statsResult.finished}</span>
-                  </div>
-                </div>
+                  <button
+                    onClick={() => {
+                      const range = projects.filter(p => {
+                        const ca = (p.created_at as string).split('T')[0]
+                        return ca >= statsStartDate && ca <= statsEndDate
+                      })
+                      const STATUS_CN: Record<string, string> = {
+                        active: '进行中', delayed: '已取消', completed: '已完成', cancelled: '未签约',
+                      }
+                      const rows: string[][] = [['项目名称', '委托方', '事务类型', '项目所属行业', '签约方', '服务费币种', '服务费金额', '协作方', '状态', '创建日期']]
+                      range.forEach(p => {
+                        rows.push([
+                          p.name || '',
+                          p.client || '',
+                          p.matter_type || '',
+                          p.industry || '',
+                          p.agreement_party || '',
+                          p.service_fee_currency || '',
+                          p.service_fee_amount != null ? String(p.service_fee_amount) : '',
+                          (p.collaboration_parties as string[] | null)?.join('、') || '',
+                          STATUS_CN[p.status] || p.status || '',
+                          (p.created_at as string).split('T')[0],
+                        ])
+                      })
+                      downloadCSV(`项目统计_${statsStartDate}_${statsEndDate}.csv`, rows)
+                    }}
+                    className="w-full py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
+                  >
+                    导出 CSV（{statsResult.total} 个项目）
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -658,6 +719,12 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">项目所属行业</label>
+                <input value={newProjIndustry} onChange={e => setNewProjIndustry(e.target.value)}
+                  placeholder="如：金融、房地产、科技（可选）" className="input-field" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

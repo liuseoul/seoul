@@ -15,13 +15,13 @@ type EditForm = {
   name: string; client: string; description: string
   agreement_party: string; service_fee_currency: string
   service_fee_amount: string; collaboration_parties: string
-  status: string; matter_type: string
+  status: string; matter_type: string; industry: string
 }
 
 const EMPTY_FORM: EditForm = {
   name: '', client: '', description: '', agreement_party: '',
   service_fee_currency: '', service_fee_amount: '', collaboration_parties: '',
-  status: 'active', matter_type: '',
+  status: 'active', matter_type: '', industry: '',
 }
 
 const STATUS_EDIT = [
@@ -288,6 +288,7 @@ export default function ProjectDetailPanel({
       collaboration_parties: (project.collaboration_parties as string[] | null)?.join('，') || '',
       status:                project.status || 'active',
       matter_type:           project.matter_type || '',
+      industry:              project.industry || '',
     })
     setShowEdit(true)
   }
@@ -311,6 +312,7 @@ export default function ProjectDetailPanel({
         : [],
       status:                editForm.status,
       matter_type:           editForm.matter_type || null,
+      industry:              editForm.industry.trim() || null,
     }).eq('id', project.id)
     setEditSaving(false)
     if (error) { alert('保存失败：' + error.message); return }
@@ -711,6 +713,11 @@ export default function ProjectDetailPanel({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">委托方</label>
                 <input type="text" value={editForm.client} onChange={e => setEditField('client', e.target.value)} className="input-field" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">项目所属行业</label>
+                <input type="text" value={editForm.industry} onChange={e => setEditField('industry', e.target.value)}
+                  placeholder="如：金融、房地产、科技（可选）" className="input-field" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">事务类型</label>
