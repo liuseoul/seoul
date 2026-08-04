@@ -95,9 +95,10 @@ export default function ProjectDetailPanel({
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set())
 
   // ── Edit project modal ────────────────────────────────────
-  const [showEdit,   setShowEdit]   = useState(false)
-  const [editForm,   setEditForm]   = useState<EditForm>(EMPTY_FORM)
-  const [editSaving, setEditSaving] = useState(false)
+  const [showEdit,      setShowEdit]      = useState(false)
+  const [editForm,      setEditForm]      = useState<EditForm>(EMPTY_FORM)
+  const [editSaving,    setEditSaving]    = useState(false)
+  const [showDetails,   setShowDetails]   = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -334,7 +335,17 @@ export default function ProjectDetailPanel({
       {/* Header */}
       <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold text-gray-900 text-sm truncate">{project.name}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-gray-900 text-sm truncate">{project.name}</h2>
+            <button
+              onClick={() => setShowDetails(true)}
+              className="flex-shrink-0 text-[11px] text-indigo-600 hover:text-indigo-800
+                         border border-indigo-300 hover:border-indigo-500 rounded px-1.5 py-0.5
+                         transition-colors leading-none whitespace-nowrap"
+            >
+              项目详情
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2 mt-1.5">
             {project.agreement_party && (
               <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
@@ -1004,6 +1015,49 @@ export default function ProjectDetailPanel({
                 className="flex-1 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700
                            rounded-lg disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
                 {savingEditLog ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Project Details Modal ── */}
+      {showDetails && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">项目详情</h3>
+              <button onClick={() => setShowDetails(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <dl className="space-y-3">
+                {([
+                  ['项目名称',     project.name],
+                  ['委托方',       project.client],
+                  ['项目所属行业', project.industry],
+                  ['事务类型',     project.matter_type],
+                  ['签约方',       project.agreement_party],
+                  ['服务费',       project.service_fee_currency
+                    ? `${project.service_fee_currency}${project.service_fee_amount != null ? ' ' + Number(project.service_fee_amount).toLocaleString() : ''}`
+                    : null],
+                  ['协作方',       (project.collaboration_parties as string[] | null)?.join('、') || null],
+                  ['状态',         STATUS_LABELS[project.status] || project.status],
+                  ['创建日期',     project.created_at ? (project.created_at as string).split('T')[0] : null],
+                  ['项目描述',     project.description],
+                ] as [string, string | null][]).map(([label, value]) => (
+                  value ? (
+                    <div key={label} className="flex gap-3">
+                      <dt className="text-sm text-gray-400 w-24 flex-shrink-0">{label}</dt>
+                      <dd className="text-sm text-gray-800 flex-1 break-words">{value}</dd>
+                    </div>
+                  ) : null
+                ))}
+              </dl>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button onClick={() => setShowDetails(false)}
+                className="w-full py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                关闭
               </button>
             </div>
           </div>

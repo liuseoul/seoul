@@ -241,8 +241,9 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   }
 
   const sorted = (list: any[]) => {
-    const active  = list.filter((p: any) => p.status !== 'delayed')
-    const delayed = list.filter((p: any) => p.status === 'delayed')
+    const REAR_STATUSES = new Set(['delayed', 'cancelled'])
+    const active  = list.filter((p: any) => !REAR_STATUSES.has(p.status))
+    const rear    = list.filter((p: any) =>  REAR_STATUSES.has(p.status))
     if (sortMode === 'activity') {
       active.sort((a: any, b: any) => {
         const ta = getMaxActivityTs(a), tb = getMaxActivityTs(b)
@@ -250,12 +251,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
     } else {
-      // sort by created_at DESC
       active.sort((a: any, b: any) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
     }
-    return [...active, ...delayed]
+    return [...active, ...rear]
   }
 
   const filtered    = sorted(filter === 'all' ? projects : projects.filter((p: any) => p.status === filter))
