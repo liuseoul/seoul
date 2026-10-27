@@ -298,10 +298,10 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
             <div key={key} className="flex items-center gap-1.5">
               {i > 0 && <span className="w-px h-4 bg-teal-200 flex-shrink-0" />}
               <button onClick={() => setFilter(key)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
+                className={`px-2 py-1 rounded-full text-xs font-medium transition-colors duration-150 whitespace-nowrap
                   ${filter === key ? STATUS_PILL_ON[key] : STATUS_PILL_OFF[key]}`}>
                 {STATUS_LABELS[key]}
-                <span className="ml-1 text-xs opacity-70">
+                <span className="ml-1 opacity-70">
                   {projects.filter((p: any) => p.status === key).length}
                 </span>
               </button>
@@ -313,12 +313,12 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
           {/* Utility buttons */}
           <button onClick={() => { setShowStats(true); setStatsResult(null) }}
-            className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
+            className="px-2 py-1 rounded-full text-xs font-medium transition-colors duration-150 whitespace-nowrap
                        bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex-shrink-0">
             项目统计
           </button>
           <button onClick={() => { setPendingSort(sortMode); setShowSortPicker(true) }}
-            className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 whitespace-nowrap
+            className="px-2 py-1 rounded-full text-xs font-medium transition-colors duration-150 whitespace-nowrap
                        bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm flex-shrink-0">
             项目排序
           </button>
