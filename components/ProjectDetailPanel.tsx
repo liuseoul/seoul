@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 const STATUS_LABELS: Record<string, string> = {
-  active: '进行中',
-  delayed: '已取消',
-  completed: '已完成',
-  cancelled: '未签约',
+  active:   '进行中',
+  quoting:  '报价阶段',
+  delayed:  '已取消',
+  completed:'已完成',
+  cancelled:'未签约',
 }
 
 const MATTER_TYPES = ['投资', '民事', '刑事', '行政', '知识产权', '法律意见书', '签证', '咨询', '常年法律顾问']
@@ -26,6 +27,7 @@ const EMPTY_FORM: EditForm = {
 
 const STATUS_EDIT = [
   { value: 'active',    label: '进行中' },
+  { value: 'quoting',   label: '报价阶段' },
   { value: 'completed', label: '已完成' },
   { value: 'cancelled', label: '未签约' },
   { value: 'delayed',   label: '已取消' },
@@ -389,6 +391,7 @@ export default function ProjectDetailPanel({
                        focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
             <option value="active">进行中</option>
+            <option value="quoting">报价阶段</option>
             <option value="delayed">已取消</option>
             <option value="completed">已完成</option>
             <option value="cancelled">未签约</option>

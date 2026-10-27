@@ -9,12 +9,13 @@ import TodoPanel from './TodoPanel'
 const STATUS_LABELS: Record<string, string> = {
   all:       '全部',
   active:    '进行中',
+  quoting:   '报价阶段',
   delayed:   '已取消',
   completed: '已完成',
   cancelled: '未签约',
 }
 
-const STATUS_ORDER = ['all', 'active', 'delayed', 'completed', 'cancelled']
+const STATUS_ORDER = ['all', 'active', 'quoting', 'delayed', 'completed', 'cancelled']
 
 const ROW_COLORS = ['bg-white', 'bg-teal-50']
 
@@ -22,6 +23,7 @@ const ROW_COLORS = ['bg-white', 'bg-teal-50']
 const STATUS_PILL_ON: Record<string, string> = {
   all:       'bg-teal-600 text-white shadow-sm',
   active:    'bg-teal-600 text-white shadow-sm',
+  quoting:   'bg-orange-500 text-white shadow-sm',
   delayed:   'bg-amber-500 text-white shadow-sm',
   completed: 'bg-green-600 text-white shadow-sm',
   cancelled: 'bg-gray-500 text-white shadow-sm',
@@ -29,6 +31,7 @@ const STATUS_PILL_ON: Record<string, string> = {
 const STATUS_PILL_OFF: Record<string, string> = {
   all:       'text-gray-600 hover:bg-gray-100',
   active:    'bg-teal-50 text-teal-700 hover:bg-teal-100',
+  quoting:   'bg-orange-50 text-orange-700 hover:bg-orange-100',
   delayed:   'bg-amber-50 text-amber-700 hover:bg-amber-100',
   completed: 'bg-green-50 text-green-700 hover:bg-green-100',
   cancelled: 'bg-gray-100 text-gray-500 hover:bg-gray-200',
@@ -242,8 +245,9 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
   const sorted = (list: any[]) => {
     const REAR_STATUSES = new Set(['delayed', 'cancelled'])
-    const active  = list.filter((p: any) => !REAR_STATUSES.has(p.status))
-    const rear    = list.filter((p: any) =>  REAR_STATUSES.has(p.status))
+    const active  = list.filter((p: any) => !REAR_STATUSES.has(p.status) && p.status !== 'quoting')
+    const quoting = list.filter((p: any) => p.status === 'quoting')
+    const rear    = list.filter((p: any) => REAR_STATUSES.has(p.status))
     if (sortMode === 'activity') {
       active.sort((a: any, b: any) => {
         const ta = getMaxActivityTs(a), tb = getMaxActivityTs(b)
@@ -255,7 +259,11 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
     }
-    return [...active, ...rear]
+    // 报价阶段: queue in chronological order (oldest first)
+    quoting.sort((a: any, b: any) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    return [...active, ...quoting, ...rear]
   }
 
   const filtered    = sorted(filter === 'all' ? projects : projects.filter((p: any) => p.status === filter))
@@ -264,6 +272,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   // Label map for the form status select
   const STATUS_EDIT = [
     { value: 'active',    label: '进行中' },
+    { value: 'quoting',   label: '报价阶段' },
     { value: 'completed', label: '已完成' },
     { value: 'cancelled', label: '未签约' },
     { value: 'delayed',   label: '已取消' },
@@ -649,7 +658,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                         return ca >= statsStartDate && ca <= statsEndDate
                       })
                       const STATUS_CN: Record<string, string> = {
-                        active: '进行中', delayed: '已取消', completed: '已完成', cancelled: '未签约',
+                        active: '进行中', quoting: '报价阶段', delayed: '已取消', completed: '已完成', cancelled: '未签约',
                       }
                       const rows: string[][] = [['项目名称', '委托方', '事务类型', '项目所属行业', '签约方', '服务费币种', '服务费金额', '协作方', '状态', '创建日期']]
                       range.forEach(p => {
@@ -732,6 +741,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                   <label className="block text-sm font-medium text-gray-700 mb-1">初始状态</label>
                   <select value={newProjStatus} onChange={e => setNewProjStatus(e.target.value)} className="input-field">
                     <option value="active">进行中</option>
+                    <option value="quoting">报价阶段</option>
                     <option value="cancelled">未签约</option>
                   </select>
                 </div>
