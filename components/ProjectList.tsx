@@ -240,7 +240,8 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
       const ts = new Date(l.started_at).getTime()
       if (ts > maxTs) maxTs = ts
     }
-    return maxTs
+    // Fall back to created_at so matters with no records (e.g. 报价阶段) still sort by date
+    return maxTs || new Date(p.created_at).getTime()
   }
 
   const sorted = (list: any[]) => {
