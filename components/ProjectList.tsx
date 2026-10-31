@@ -244,7 +244,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
   }
 
   const sorted = (list: any[]) => {
-    const REAR_STATUSES = new Set(['delayed', 'cancelled'])
+    const REAR_STATUSES = new Set(['delayed', 'cancelled', 'completed'])
     const active = list.filter((p: any) => !REAR_STATUSES.has(p.status))
     const rear   = list.filter((p: any) =>  REAR_STATUSES.has(p.status))
     if (sortMode === 'activity') {
