@@ -245,9 +245,8 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
   const sorted = (list: any[]) => {
     const REAR_STATUSES = new Set(['delayed', 'cancelled'])
-    const active  = list.filter((p: any) => !REAR_STATUSES.has(p.status) && p.status !== 'quoting')
-    const quoting = list.filter((p: any) => p.status === 'quoting')
-    const rear    = list.filter((p: any) => REAR_STATUSES.has(p.status))
+    const active = list.filter((p: any) => !REAR_STATUSES.has(p.status))
+    const rear   = list.filter((p: any) =>  REAR_STATUSES.has(p.status))
     if (sortMode === 'activity') {
       active.sort((a: any, b: any) => {
         const ta = getMaxActivityTs(a), tb = getMaxActivityTs(b)
@@ -259,11 +258,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
     }
-    // 报价阶段: queue in chronological order (oldest first)
-    quoting.sort((a: any, b: any) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
-    return [...active, ...quoting, ...rear]
+    return [...active, ...rear]
   }
 
   const filtered    = sorted(filter === 'all' ? projects : projects.filter((p: any) => p.status === filter))
