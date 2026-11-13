@@ -346,12 +346,13 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
           {filtered.map((project: any, index: number) => {
             const isCancelled  = project.status === 'delayed'
             const isCompleted  = project.status === 'completed'
+            const isUnsigned   = project.status === 'cancelled'
             const isDimmed     = isCancelled || isCompleted
             const isStruckThrough = isCancelled || isCompleted
             const recordCount = (project.work_records || []).filter((r: any) => !r.deleted).length
             const hours       = calcHours(project.time_logs || [])
             const isSelected  = selectedId === project.id
-            const rowBg       = ROW_COLORS[index % 2]
+            const rowBg       = isUnsigned ? 'bg-gray-300' : ROW_COLORS[index % 2]
             const latestAct   = getLatestActivity(project)
 
             return (
