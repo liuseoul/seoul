@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 const STATUS_LABELS: Record<string, string> = {
-  active:   '进行中',
+  active:   '已签约',
   quoting:  '报价阶段',
   delayed:  '已取消',
   completed:'已完成',
@@ -26,7 +26,7 @@ const EMPTY_FORM: EditForm = {
 }
 
 const STATUS_EDIT = [
-  { value: 'active',    label: '进行中' },
+  { value: 'active',    label: '已签约' },
   { value: 'quoting',   label: '报价阶段' },
   { value: 'completed', label: '已完成' },
   { value: 'cancelled', label: '未签约' },
@@ -91,7 +91,8 @@ export default function ProjectDetailPanel({
   const [records, setRecords]         = useState<any[]>([])
   const [timeLogs, setTimeLogs]       = useState<any[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [statusChanging, setStatusChanging] = useState(false)
+  const [statusChanging,  setStatusChanging]  = useState(false)
+  const [pendingStatus,   setPendingStatus]   = useState(project.status)
   const [showTimeStats,  setShowTimeStats]  = useState(false)
   const [showExport,     setShowExport]     = useState(false)
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set())
@@ -384,18 +385,28 @@ export default function ProjectDetailPanel({
         )}
         {isAdmin && (
           <select
-            defaultValue={project.status}
+            value={pendingStatus}
             disabled={statusChanging}
-            onChange={e => changeStatus(e.target.value)}
+            onChange={e => setPendingStatus(e.target.value)}
             className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white
                        focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
-            <option value="active">进行中</option>
+            <option value="active">已签约</option>
             <option value="quoting">报价阶段</option>
             <option value="delayed">已取消</option>
             <option value="completed">已完成</option>
             <option value="cancelled">未签约</option>
           </select>
+        )}
+        {isAdmin && pendingStatus !== project.status && (
+          <button
+            onClick={() => changeStatus(pendingStatus)}
+            disabled={statusChanging}
+            className="text-xs text-white bg-teal-600 hover:bg-teal-700 disabled:bg-gray-200
+                       rounded px-2 py-1 transition-colors font-medium"
+          >
+            {statusChanging ? '…' : '修改'}
+          </button>
         )}
         {isAdmin && (
           <button onClick={openProjectEdit}

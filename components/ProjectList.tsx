@@ -8,7 +8,7 @@ import TodoPanel from './TodoPanel'
 
 const STATUS_LABELS: Record<string, string> = {
   all:       '全部',
-  active:    '进行中',
+  active:    '已签约',
   quoting:   '报价阶段',
   delayed:   '已取消',
   completed: '已完成',
@@ -267,7 +267,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
 
   // Label map for the form status select
   const STATUS_EDIT = [
-    { value: 'active',    label: '进行中' },
+    { value: 'active',    label: '已签约' },
     { value: 'quoting',   label: '报价阶段' },
     { value: 'completed', label: '已完成' },
     { value: 'cancelled', label: '未签约' },
@@ -654,7 +654,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                         return ca >= statsStartDate && ca <= statsEndDate
                       })
                       const STATUS_CN: Record<string, string> = {
-                        active: '进行中', quoting: '报价阶段', delayed: '已取消', completed: '已完成', cancelled: '未签约',
+                        active: '已签约', quoting: '报价阶段', delayed: '已取消', completed: '已完成', cancelled: '未签约',
                       }
                       const rows: string[][] = [['项目名称', '委托方', '事务类型', '项目所属行业', '签约方', '服务费币种', '服务费金额', '协作方', '状态', '创建日期']]
                       range.forEach(p => {
@@ -736,7 +736,7 @@ export default function ProjectList({ projects, profile }: { projects: any[]; pr
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">初始状态</label>
                   <select value={newProjStatus} onChange={e => setNewProjStatus(e.target.value)} className="input-field">
-                    <option value="active">进行中</option>
+                    <option value="active">已签约</option>
                     <option value="quoting">报价阶段</option>
                     <option value="cancelled">未签约</option>
                   </select>
